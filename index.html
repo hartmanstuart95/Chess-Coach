@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.4</title>
+<title>Chess Coach v0.5</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -46,13 +46,19 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .pv{margin-top:10px;padding:10px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.5}
 .bestFrom{box-shadow:inset 0 0 0 5px rgba(34,197,94,.65)}
 .bestTo{box-shadow:inset 0 0 0 5px rgba(34,197,94,.95)}
+.reviewGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.reviewBox{background:#101218;border:1px solid #343a46;border-radius:10px;padding:10px}
+.reviewLabel{font-size:12px;color:var(--muted);margin-bottom:4px}
+.reviewBig{font-size:21px;font-weight:800}
+.reviewText{margin-top:10px;padding:11px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.5}
+.classBest{color:#86efac}.classExcellent{color:#a7f3d0}.classGood{color:#bfdbfe}.classInaccuracy{color:#fde68a}.classMistake{color:#fdba74}.classBlunder{color:#fca5a5}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.4</h1>
-<div class="sub">Interactive analysis board with live Stockfish guidance.</div>
+<h1>Chess Coach v0.5</h1>
+<div class="sub">Live Stockfish guidance + move-by-move coaching.</div>
 
 <div class="layout">
   <div>
@@ -125,7 +131,38 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         <div class="engineLabel">Best line</div>
         <div id="pvValue">—</div>
       </div>
-      <div class="small" style="margin-top:8px">Stockfish 18 • live iPad analysis • depth 12</div>
+      <div class="small" style="margin-top:8px">Stockfish 18 • live analysis depth 12 • move review depth 10</div>
+    </div>
+
+    <div class="card">
+      <div class="badge">COACH</div>
+      <strong> Review the move</strong>
+      <p class="small">Go to any move in the game, then compare the move that was played with Stockfish's best choice.</p>
+      <button id="reviewMoveBtn" class="primary">Review current move</button>
+      <div id="reviewStatus" class="small" style="margin-top:8px">Choose a position after at least one move.</div>
+      <div class="reviewGrid">
+        <div class="reviewBox">
+          <div class="reviewLabel">Your move</div>
+          <div id="reviewActual" class="reviewBig">—</div>
+        </div>
+        <div class="reviewBox">
+          <div class="reviewLabel">Coach rating</div>
+          <div id="reviewClass" class="reviewBig">—</div>
+        </div>
+        <div class="reviewBox">
+          <div class="reviewLabel">Best move</div>
+          <div id="reviewBest" class="reviewBig">—</div>
+        </div>
+        <div class="reviewBox">
+          <div class="reviewLabel">Eval loss</div>
+          <div id="reviewLoss" class="reviewBig">—</div>
+        </div>
+      </div>
+      <div class="reviewText">
+        <div class="reviewLabel">What did I miss?</div>
+        <div id="reviewExplain">Review a move to see the coaching note.</div>
+      </div>
+      <div class="small" style="margin-top:8px">Ratings use Chess Coach's centipawn-loss heuristic; they are not Chess.com classifications.</div>
     </div>
 
     <div class="card">
@@ -164,6 +201,9 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let lastEngineInfo={depth:0,score:null,mate:null,pv:[]};
   let analysisTimer=null;
   let activeAnalysisFen=null;
+  let reviewStage=null;
+  let reviewData=null;
+  let reviewInfo={score:null,mate:null,pv:[],depth:0};
 
   function squareNames(){
     const fs=orientation==='white'
@@ -295,6 +335,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     feedbackEl.textContent='Played '+move.san;
     feedbackEl.className='small ok';
     clearEngineDisplay();
+    clearReview();
     render();
     scheduleAutoAnalysis();
   }
@@ -320,6 +361,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     selected=null;
     legalTargets=[];
     clearEngineDisplay();
+    clearReview();
     render();
     scheduleAutoAnalysis();
   }
@@ -365,6 +407,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     feedbackEl.textContent='Board reset.';
     feedbackEl.className='small';
     clearEngineDisplay();
+    clearReview();
     render();
     scheduleAutoAnalysis();
   });
@@ -501,8 +544,185 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     setEvalBar(pawns);
   }
 
+  function buildPositionAt(n){
+    const g=new Chess();
+    let last=null;
+    for(let i=0;i<n;i++){
+      const m=g.move(loadedMoves[i]);
+      if(!m)return null;
+      last=m;
+    }
+    return {game:g,last};
+  }
+
+  function scoreToWhiteCp(score,mate,turn){
+    let sideCp;
+    if(mate!==null){
+      if(mate===0)sideCp=0;
+      else sideCp=mate>0?100000:-100000;
+    }else{
+      sideCp=score===null?0:score;
+    }
+    return turn==='w'?sideCp:-sideCp;
+  }
+
+  function classifyMove(loss,exactBest){
+    if(exactBest)return {label:'Best',cls:'classBest'};
+    if(loss<=20)return {label:'Excellent',cls:'classExcellent'};
+    if(loss<=50)return {label:'Good',cls:'classGood'};
+    if(loss<=100)return {label:'Inaccuracy',cls:'classInaccuracy'};
+    if(loss<=200)return {label:'Mistake',cls:'classMistake'};
+    return {label:'Blunder',cls:'classBlunder'};
+  }
+
+  function clearReview(){
+    document.getElementById('reviewActual').textContent='—';
+    document.getElementById('reviewClass').textContent='—';
+    document.getElementById('reviewClass').className='reviewBig';
+    document.getElementById('reviewBest').textContent='—';
+    document.getElementById('reviewLoss').textContent='—';
+    document.getElementById('reviewExplain').textContent='Review a move to see the coaching note.';
+  }
+
+  function startReviewAnalysis(fen,stage){
+    reviewStage=stage;
+    reviewInfo={score:null,mate:null,pv:[],depth:0};
+    engine.postMessage('stop');
+    engine.postMessage('position fen '+fen);
+    engine.postMessage('go depth 10');
+  }
+
+  function finishMoveReview(){
+    const d=reviewData;
+    const beforeWhite=scoreToWhiteCp(d.before.score,d.before.mate,d.before.turn);
+    const afterWhite=scoreToWhiteCp(d.after.score,d.after.mate,d.after.turn);
+    const mover=d.before.turn;
+    const beforeMover=mover==='w'?beforeWhite:-beforeWhite;
+    const afterMover=mover==='w'?afterWhite:-afterWhite;
+    const loss=Math.max(0,beforeMover-afterMover);
+    const exactBest=d.actualUci===d.bestUci;
+    const rating=classifyMove(loss,exactBest);
+
+    document.getElementById('reviewActual').textContent=d.actualSan;
+    document.getElementById('reviewBest').textContent=d.bestSan;
+    document.getElementById('reviewLoss').textContent=(loss/100).toFixed(2);
+    const classEl=document.getElementById('reviewClass');
+    classEl.textContent=rating.label;
+    classEl.className='reviewBig '+rating.cls;
+
+    let explanation='';
+    if(exactBest){
+      explanation='You found Stockfish’s top move in this position. Nice calculation.';
+    }else if(loss<=20){
+      explanation='Your move was essentially as strong as the engine choice. Stockfish slightly prefers '+d.bestSan+'.';
+    }else if(loss<=50){
+      explanation='Your move was solid, but '+d.bestSan+' kept a little more pressure or improved the position more efficiently.';
+    }else if(loss<=100){
+      explanation='You missed a stronger continuation. Compare your '+d.actualSan+' with '+d.bestSan+' and look first for checks, captures, and threats.';
+    }else if(loss<=200){
+      explanation='This move caused a meaningful evaluation swing. Stockfish preferred '+d.bestSan+'. Revisit the position and calculate your opponent’s forcing reply before committing.';
+    }else{
+      explanation='This was a large evaluation swing. The key training question is: what forcing move became available after '+d.actualSan+'? Stockfish wanted '+d.bestSan+'.';
+    }
+
+    document.getElementById('reviewExplain').textContent=explanation;
+    document.getElementById('reviewStatus').textContent='Move review complete • depth '+Math.min(d.before.depth,d.after.depth);
+    reviewStage=null;
+    reviewData=null;
+
+    if(document.getElementById('autoAnalyze')?.checked){
+      scheduleAutoAnalysis();
+    }
+  }
+
+  function startMoveReview(){
+    if(cursor<1){
+      document.getElementById('reviewStatus').textContent='Move to a position after at least one move.';
+      return;
+    }
+
+    const before=buildPositionAt(cursor-1);
+    const after=buildPositionAt(cursor);
+    if(!before||!after||!after.last){
+      document.getElementById('reviewStatus').textContent='Could not reconstruct this move.';
+      return;
+    }
+
+    clearTimeout(analysisTimer);
+    if(engine)engine.postMessage('stop');
+
+    reviewData={
+      beforeFen:before.game.fen(),
+      afterFen:after.game.fen(),
+      before:{turn:before.game.turn(),score:null,mate:null,depth:0},
+      after:{turn:after.game.turn(),score:null,mate:null,depth:0},
+      actualSan:loadedMoves[cursor-1],
+      actualUci:after.last.from+after.last.to+(after.last.promotion||''),
+      bestUci:null,
+      bestSan:'—'
+    };
+
+    document.getElementById('reviewActual').textContent=reviewData.actualSan;
+    document.getElementById('reviewClass').textContent='…';
+    document.getElementById('reviewBest').textContent='…';
+    document.getElementById('reviewLoss').textContent='…';
+    document.getElementById('reviewExplain').textContent='Analyzing the position before and after your move…';
+    document.getElementById('reviewStatus').textContent='Reviewing move…';
+
+    const go=()=>{
+      startReviewAnalysis(reviewData.beforeFen,'before');
+    };
+
+    if(engineReady&&engine)go();
+    else{
+      reviewStage='waiting';
+      initEngine();
+      const wait=setInterval(()=>{
+        if(engineReady&&engine){
+          clearInterval(wait);
+          go();
+        }
+      },100);
+      setTimeout(()=>clearInterval(wait),12000);
+    }
+  }
+
   function handleEngineLine(line){
     if(typeof line!=='string')return;
+
+    if(reviewStage&&reviewStage!=='waiting'){
+      if(line.startsWith('info ')){
+        const depthMatch=line.match(/\bdepth (\d+)/);
+        const cpMatch=line.match(/\bscore cp (-?\d+)/);
+        const mateMatch=line.match(/\bscore mate (-?\d+)/);
+        const pvIndex=line.indexOf(' pv ');
+        if(depthMatch)reviewInfo.depth=parseInt(depthMatch[1],10);
+        if(cpMatch){reviewInfo.score=parseInt(cpMatch[1],10);reviewInfo.mate=null;}
+        if(mateMatch){reviewInfo.mate=parseInt(mateMatch[1],10);reviewInfo.score=null;}
+        if(pvIndex>=0)reviewInfo.pv=line.slice(pvIndex+4).trim().split(/\s+/);
+        return;
+      }
+      if(line.startsWith('bestmove ')){
+        const bm=line.split(/\s+/)[1];
+        if(reviewStage==='before'){
+          reviewData.before.score=reviewInfo.score;
+          reviewData.before.mate=reviewInfo.mate;
+          reviewData.before.depth=reviewInfo.depth;
+          reviewData.bestUci=bm;
+          reviewData.bestSan=uciToSan(reviewData.beforeFen,bm);
+          startReviewAnalysis(reviewData.afterFen,'after');
+        }else if(reviewStage==='after'){
+          reviewData.after.score=reviewInfo.score;
+          reviewData.after.mate=reviewInfo.mate;
+          reviewData.after.depth=reviewInfo.depth;
+          finishMoveReview();
+        }
+        return;
+      }
+      if(line==='uciok'){engine.postMessage('isready');return;}
+      if(line==='readyok'){engineReady=true;engineLoading=false;return;}
+    }
+
     if(activeAnalysisFen&&activeAnalysisFen!==game.fen()&&line.startsWith('info '))return;
 
     if(line==='uciok'){
@@ -513,7 +733,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       engineReady=true;
       engineLoading=false;
       document.getElementById('engineStatus').textContent='Engine ready.';
-      runAnalysis();
+      if(reviewStage!=='waiting')runAnalysis();
       return;
     }
 
@@ -617,6 +837,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   }
 
   document.getElementById('analyzeBtn').addEventListener('click',initEngine);
+  document.getElementById('reviewMoveBtn').addEventListener('click',startMoveReview);
   document.getElementById('autoAnalyze').addEventListener('change',e=>{
     if(e.target.checked)scheduleAutoAnalysis();
     else{
