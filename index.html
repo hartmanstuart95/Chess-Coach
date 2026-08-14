@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.6</title>
+<title>Chess Coach v0.6.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -51,7 +51,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .reviewLabel{font-size:12px;color:var(--muted);margin-bottom:4px}
 .reviewBig{font-size:21px;font-weight:800}
 .reviewText{margin-top:10px;padding:11px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.5}
-.classBest{color:#86efac}.classExcellent{color:#a7f3d0}.classGood{color:#bfdbfe}.classInaccuracy{color:#fde68a}.classMistake{color:#fdba74}.classBlunder{color:#fca5a5}
+.classBest{color:#86efac}.classExcellent{color:#a7f3d0}.classGood{color:#bfdbfe}.classInaccuracy{color:#fde68a}.classMistake{color:#fdba74}.classBlunder{color:#fca5a5}.classMate{color:#f0abfc}
 .progressTrack{height:9px;background:#101218;border:1px solid #343a46;border-radius:999px;overflow:hidden;margin-top:10px}
 .progressFill{height:100%;width:0%;background:#0ea5e9;transition:width .2s ease}
 .summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
@@ -65,7 +65,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.6</h1>
+<h1>Chess Coach v0.6.1</h1>
 <div class="sub">Live Stockfish guidance + full-game learning review.</div>
 
 <div class="layout">
@@ -160,7 +160,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div id="keyMoves" class="keyMoves">
         <div class="small">Your biggest evaluation swings will appear here.</div>
       </div>
-      <div class="small" style="margin-top:8px">Batch review uses depth 8 for speed on iPad. Tap a flagged move for the deeper coaching panel.</div>
+      <div class="small" style="margin-top:8px">Batch review uses depth 8 for speed on iPad. Mate positions are classified separately. Tap a flagged move for deeper coaching.</div>
     </div>
 
     <div class="card">
@@ -191,7 +191,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         <div class="reviewLabel">What did I miss?</div>
         <div id="reviewExplain">Review a move to see the coaching note.</div>
       </div>
-      <div class="small" style="margin-top:8px">Ratings use Chess Coach's centipawn-loss heuristic; they are not Chess.com classifications.</div>
+      <div class="small" style="margin-top:8px">Ratings use Chess Coach's centipawn-loss heuristic. Mate is classified separately from centipawn loss.</div>
     </div>
 
     <div class="card">
@@ -592,15 +592,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     return {game:g,last};
   }
 
-  function scoreToWhiteCp(score,mate,turn){
-    let sideCp;
+  function scoreToWhite(score,mate,turn){
     if(mate!==null){
-      if(mate===0)sideCp=0;
-      else sideCp=mate>0?100000:-100000;
-    }else{
-      sideCp=score===null?0:score;
+      const mateForSide=mate>0;
+      const whiteWinning=turn==='w'?mateForSide:!mateForSide;
+      return {type:'mate',whiteWinning,mate:Math.abs(mate)};
     }
-    return turn==='w'?sideCp:-sideCp;
+    let cp=score===null?0:score;
+    if(turn==='b')cp=-cp;
+    return {type:'cp',cp};
+  }
+
+  function cpForMover(result,mover){
+    if(result.type!=='cp')return null;
+    return mover==='w'?result.cp:-result.cp;
   }
 
   function classifyMove(loss,exactBest){
@@ -610,6 +615,35 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     if(loss<=100)return {label:'Inaccuracy',cls:'classInaccuracy'};
     if(loss<=200)return {label:'Mistake',cls:'classMistake'};
     return {label:'Blunder',cls:'classBlunder'};
+  }
+
+  function classifyMateTransition(beforeResult,afterResult,mover,exactBest,actualSan){
+    const moverWasWinningMate =
+      beforeResult.type==='mate' &&
+      ((mover==='w'&&beforeResult.whiteWinning)||(mover==='b'&&!beforeResult.whiteWinning));
+
+    const moverIsWinningMate =
+      afterResult.type==='mate' &&
+      ((mover==='w'&&afterResult.whiteWinning)||(mover==='b'&&!afterResult.whiteWinning));
+
+    const moverIsLosingMate =
+      afterResult.type==='mate' &&
+      ((mover==='w'&&!afterResult.whiteWinning)||(mover==='b'&&afterResult.whiteWinning));
+
+    if(actualSan&&actualSan.includes('#')){
+      return {label:'Checkmate',cls:'classMate',mateNote:'You delivered checkmate.'};
+    }
+    if(moverWasWinningMate&&!moverIsWinningMate){
+      return {label:'Mate missed',cls:'classBlunder',mateNote:'You had a forced mate but let it slip.'};
+    }
+    if(moverIsLosingMate){
+      return {label:'Mate allowed',cls:'classBlunder',mateNote:'This move allowed a forced mate against your king.'};
+    }
+    if(moverIsWinningMate){
+      return {label:'Mate found',cls:'classMate',mateNote:'This move preserves or creates a forced mating sequence.'};
+    }
+    if(exactBest)return {label:'Best',cls:'classBest',mateNote:null};
+    return null;
   }
 
   function clearReview(){
@@ -631,24 +665,32 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
   function finishMoveReview(){
     const d=reviewData;
-    const beforeWhite=scoreToWhiteCp(d.before.score,d.before.mate,d.before.turn);
-    const afterWhite=scoreToWhiteCp(d.after.score,d.after.mate,d.after.turn);
+    const beforeResult=scoreToWhite(d.before.score,d.before.mate,d.before.turn);
+    const afterResult=scoreToWhite(d.after.score,d.after.mate,d.after.turn);
     const mover=d.before.turn;
-    const beforeMover=mover==='w'?beforeWhite:-beforeWhite;
-    const afterMover=mover==='w'?afterWhite:-afterWhite;
-    const loss=Math.max(0,beforeMover-afterMover);
     const exactBest=d.actualUci===d.bestUci;
-    const rating=classifyMove(loss,exactBest);
+    const mateRating=classifyMateTransition(beforeResult,afterResult,mover,exactBest,d.actualSan);
+    let loss=0;
+    let rating=mateRating;
+    if(!rating){
+      const beforeMover=cpForMover(beforeResult,mover);
+      const afterMover=cpForMover(afterResult,mover);
+      loss=Math.max(0,(beforeMover??0)-(afterMover??0));
+      rating=classifyMove(loss,exactBest);
+    }
 
     document.getElementById('reviewActual').textContent=d.actualSan;
     document.getElementById('reviewBest').textContent=d.bestSan;
-    document.getElementById('reviewLoss').textContent=(loss/100).toFixed(2);
+    document.getElementById('reviewLoss').textContent=mateRating?'Mate':(loss/100).toFixed(2);
     const classEl=document.getElementById('reviewClass');
     classEl.textContent=rating.label;
     classEl.className='reviewBig '+rating.cls;
 
     let explanation='';
-    if(exactBest){
+    if(mateRating&&mateRating.mateNote){
+      explanation=mateRating.mateNote;
+      if(d.bestSan&&d.bestSan!=='—'&&d.bestSan!==d.actualSan)explanation+=' Stockfish preferred '+d.bestSan+'.';
+    }else if(exactBest){
       explanation='You found Stockfish’s top move in this position. Nice calculation.';
     }else if(loss<=20){
       explanation='Your move was essentially as strong as the engine choice. Stockfish slightly prefers '+d.bestSan+'.';
@@ -781,16 +823,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       const after=batchEvaluations[i+1];
       if(!before||!after)continue;
 
-      const beforeWhite=scoreToWhiteCp(before.score,before.mate,batchPositions[i].turn);
-      const afterWhite=scoreToWhiteCp(after.score,after.mate,batchPositions[i+1].turn);
+      const beforeResult=scoreToWhite(before.score,before.mate,batchPositions[i].turn);
+      const afterResult=scoreToWhite(after.score,after.mate,batchPositions[i+1].turn);
       const mover=batchPositions[i].turn;
-      const beforeMover=mover==='w'?beforeWhite:-beforeWhite;
-      const afterMover=mover==='w'?afterWhite:-afterWhite;
-      const loss=Math.max(0,beforeMover-afterMover);
-
       const bestUci=before.bestmove||'';
       const exactBest=actual[i].uci===bestUci;
-      const rating=classifyMove(loss,exactBest);
+      const mateRating=classifyMateTransition(beforeResult,afterResult,mover,exactBest,actual[i].san);
+      let loss=0;
+      let rating=mateRating;
+      if(!rating){
+        const beforeMover=cpForMover(beforeResult,mover);
+        const afterMover=cpForMover(afterResult,mover);
+        loss=Math.max(0,(beforeMover??0)-(afterMover??0));
+        rating=classifyMove(loss,exactBest);
+      }
       const bestSan=bestUci&&bestUci!=='(none)'?uciToSan(batchPositions[i].fen,bestUci):'—';
 
       rows.push({
@@ -803,6 +849,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         bestSan,
         loss,
         rating,
+        isMateEvent:!!mateRating,
+        mateNote:mateRating?.mateNote||null,
         before,
         after
       });
@@ -810,16 +858,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     batchRows=rows;
 
-    const bestCount=rows.filter(r=>r.rating.label==='Best'||r.rating.label==='Excellent').length;
-    const goodCount=rows.filter(r=>r.rating.label==='Good'||r.rating.label==='Inaccuracy').length;
-    const badCount=rows.filter(r=>r.rating.label==='Mistake'||r.rating.label==='Blunder').length;
+    const bestCount=rows.filter(r=>['Best','Excellent','Checkmate','Mate found'].includes(r.rating.label)).length;
+    const goodCount=rows.filter(r=>['Good','Inaccuracy'].includes(r.rating.label)).length;
+    const badCount=rows.filter(r=>['Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label)).length;
     document.getElementById('sumBest').textContent=bestCount;
     document.getElementById('sumGood').textContent=goodCount;
     document.getElementById('sumBad').textContent=badCount;
 
     const key=[...rows]
-      .filter(r=>r.loss>20)
-      .sort((a,b)=>b.loss-a.loss)
+      .filter(r=>r.loss>20||r.isMateEvent)
+      .sort((a,b)=>{
+        const rank=x=>x.rating.label==='Mate allowed'||x.rating.label==='Mate missed'?10000:
+          x.rating.label==='Checkmate'||x.rating.label==='Mate found'?5000:x.loss;
+        return rank(b)-rank(a);
+      })
       .slice(0,6);
 
     const box=document.getElementById('keyMoves');
@@ -836,7 +888,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
           '<div class="keyMoveMove">'+r.moveNo+(r.side==='White'?'.':'…')+' '+r.actualSan+'</div>'+
           '<div><div class="'+r.rating.cls+'" style="font-weight:700">'+r.rating.label+'</div>'+
           '<div class="keyMoveMeta">Best: '+r.bestSan+'</div></div>'+
-          '<div class="keyMoveLoss">-'+(r.loss/100).toFixed(2)+'</div>';
+          '<div class="keyMoveLoss">'+(r.isMateEvent?'Mate':'-'+(r.loss/100).toFixed(2))+'</div>';
         btn.addEventListener('click',()=>showBatchMove(r.i));
         box.appendChild(btn);
       });
@@ -858,13 +910,16 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     document.getElementById('reviewActual').textContent=r.actualSan;
     document.getElementById('reviewBest').textContent=r.bestSan;
-    document.getElementById('reviewLoss').textContent=(r.loss/100).toFixed(2);
+    document.getElementById('reviewLoss').textContent=r.isMateEvent?'Mate':(r.loss/100).toFixed(2);
     const classEl=document.getElementById('reviewClass');
     classEl.textContent=r.rating.label;
     classEl.className='reviewBig '+r.rating.cls;
 
     let explanation='';
-    if(r.rating.label==='Best'){
+    if(r.isMateEvent&&r.mateNote){
+      explanation=r.mateNote;
+      if(r.bestSan&&r.bestSan!=='—'&&r.bestSan!==r.actualSan)explanation+=' Stockfish preferred '+r.bestSan+'.';
+    }else if(r.rating.label==='Best'){
       explanation='You found Stockfish’s top move in this position.';
     }else if(r.rating.label==='Excellent'||r.rating.label==='Good'){
       explanation='Your move was playable, but Stockfish slightly preferred '+r.bestSan+'. Compare the resulting piece activity and threats.';
@@ -1151,4 +1206,4 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 })();
 </script>
 </body>
-</html>s
+</html>
