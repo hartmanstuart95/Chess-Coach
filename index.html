@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.7.1</title>
+<title>Chess Coach v0.7.2</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -130,13 +130,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .lessonTitle{font-weight:800;margin-bottom:5px}.lessonPrompt{line-height:1.45}
 .lessonActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .puzzleStatus{margin-top:10px;font-weight:700}.puzzleGood{color:#86efac}.puzzleTry{color:#fde68a}
-.hiddenAnswer{filter:blur(6px);user-select:none}.badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
+.hiddenAnswer{filter:blur(6px);user-select:none}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;position:sticky;top:0;z-index:20;background:var(--bg);padding:4px 0 8px}
+.tabBtn{padding:8px 11px;font-size:14px;border-radius:9px;background:#20242c}
+.tabBtn.activeTab{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
+.tabPane{display:none}.tabPane.activePane{display:block}
+.focusRow{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.focusBtn{padding:7px 10px;font-size:13px}.focusBtn.activeFocus{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
+.playerHeader{margin:8px 0 10px}.playerName{font-weight:800;font-size:18px}.playerSide{font-size:12px;color:var(--muted)}
+.badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.7.1</h1>
-<div class="sub">Your games become your personalized chess lessons.</div>
+<h1>Chess Coach v0.7.2</h1>
+<div class="sub">Tabbed learning workspace + player-specific game review.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -160,8 +167,15 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     <div id="feedback" class="small" aria-live="polite">Tap a piece to see legal moves.</div>
   </div>
 
-  <div>
-    <div class="card">
+  <div class="rightPane">
+    <div class="tabs">
+      <button class="tabBtn activeTab" data-tab="gameTab">Game</button>
+      <button class="tabBtn" data-tab="engineTab">Engine</button>
+      <button class="tabBtn" data-tab="reviewTab">Review</button>
+      <button class="tabBtn" data-tab="coachTab">Coach</button>
+      <button class="tabBtn" data-tab="trainTab">Train</button>
+    </div>
+    <div id="gameTab" class="tabPane activePane"><div class="card">
       <div class="badge">PGN</div>
       <strong> Load a game</strong>
       <p class="small">Paste a complete Chess.com PGN, then tap Load PGN.</p>
@@ -181,7 +195,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div id="moves" class="moves small">No moves yet.</div>
     </div>
 
-    <div class="card">
+    </div>
+    <div id="engineTab" class="tabPane"><div class="card">
       <div class="badge">ENGINE</div>
       <strong> Stockfish analysis</strong>
       <p class="small">Analyze the position currently shown on the board.</p>
@@ -214,7 +229,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div class="small" style="margin-top:8px">Stockfish 18 • live analysis depth 12 • move review depth 10</div>
     </div>
 
-    <div class="card">
+    </div>
+    <div id="reviewTab" class="tabPane"><div class="card">
       <div class="badge">GAME REVIEW</div>
       <strong> Analyze the full game</strong>
       <p class="small">Stockfish will evaluate every position once, classify every move, and surface the biggest learning opportunities.</p>
@@ -222,7 +238,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div id="gameReviewStatus" class="small" style="margin-top:8px">Load a PGN to begin.</div>
       <div class="progressTrack"><div id="gameReviewProgress" class="progressFill"></div></div>
 
-      <div class="summaryGrid">
+      <div class="focusRow">
+          <button class="focusBtn activeFocus" data-focus="me">Me</button>
+          <button class="focusBtn" data-focus="white">White</button>
+          <button class="focusBtn" data-focus="black">Black</button>
+          <button class="focusBtn" data-focus="both">Both</button>
+        </div>
+        <div class="playerHeader"><div id="focusPlayerName" class="playerName">Focus on Me</div><div id="focusPlayerSide" class="playerSide">Load a PGN to identify your side.</div></div>
+        <div class="summaryGrid">
         <div class="summaryBox"><div id="sumBest" class="summaryNum">—</div><div class="summaryName">Best / Excellent</div></div>
         <div class="summaryBox"><div id="sumGood" class="summaryNum">—</div><div class="summaryName">Good / Inaccuracy</div></div>
         <div class="summaryBox"><div id="sumBad" class="summaryNum">—</div><div class="summaryName">Mistakes / Blunders</div></div>
@@ -235,7 +258,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div class="small" style="margin-top:8px">Batch review uses depth 8 for speed on iPad. Mate positions are classified separately. Tap a flagged move for deeper coaching.</div>
     </div>
 
-    <div class="card">
+    </div>
+    <div id="coachTab" class="tabPane"><div class="card">
       <div class="badge">COACH</div>
       <strong> Review the move</strong>
       <p class="small">Go to any move in the game, then compare the move that was played with Stockfish's best choice.</p>
@@ -266,7 +290,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div class="small" style="margin-top:8px">Ratings use Chess Coach's centipawn-loss heuristic. Mate is classified separately from centipawn loss.</div>
     </div>
 
-    <div class="card">
+    </div>
+    <div id="trainTab" class="tabPane"><div class="card">
       <div class="badge">TEACH ME</div>
       <strong> Turn mistakes into training</strong>
       <p class="small">After a full-game review, choose a key learning position and Chess Coach will turn it into a mini-lesson from your own game.</p>
@@ -286,7 +311,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div id="puzzleStatus" class="small" style="margin-top:10px">Select a key learning position first.</div>
     </div>
 
-    <div class="card">
+    </div>
+<div class="card">
       <strong>Current position</strong>
       <div class="small">FEN</div>
       <div id="fen" style="word-break:break-all;margin-top:5px"></div>
@@ -336,6 +362,70 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let puzzleMode=false;
   let puzzleExpectedUci=null;
   let puzzleMoveIndex=null;
+  let currentFocus='me';
+  let pgnHeaders={};
+  let mySide=null;
+
+  function switchTab(tabId){
+    document.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('activePane'));
+    document.querySelectorAll('.tabBtn').forEach(b=>b.classList.remove('activeTab'));
+    document.getElementById(tabId)?.classList.add('activePane');
+    document.querySelector('.tabBtn[data-tab="'+tabId+'"]')?.classList.add('activeTab');
+  }
+
+  function parseHeaders(pgn){
+    const out={}; const re=/^\[([A-Za-z0-9_]+)\s+"([^"]*)"\]/gm; let m;
+    while((m=re.exec(pgn))!==null)out[m[1]]=m[2];
+    return out;
+  }
+
+  function detectMySide(){
+    const w=(pgnHeaders.White||'').toLowerCase(), b=(pgnHeaders.Black||'').toLowerCase();
+    const known=['sjh002','hartmanstuart95'];
+    mySide=known.some(k=>w.includes(k))?'white':known.some(k=>b.includes(k))?'black':null;
+  }
+
+  function rowMatchesFocus(r){
+    if(currentFocus==='both')return true;
+    if(currentFocus==='white')return r.side==='White';
+    if(currentFocus==='black')return r.side==='Black';
+    if(currentFocus==='me'){
+      if(mySide==='white')return r.side==='White';
+      if(mySide==='black')return r.side==='Black';
+    }
+    return true;
+  }
+
+  function updateFocusHeader(){
+    const n=document.getElementById('focusPlayerName'), s=document.getElementById('focusPlayerSide');
+    if(!n||!s)return;
+    if(currentFocus==='both'){n.textContent='Both players';s.textContent='White + Black';return;}
+    if(currentFocus==='white'){n.textContent=pgnHeaders.White||'White';s.textContent='White'+(pgnHeaders.WhiteElo?' • '+pgnHeaders.WhiteElo:'');return;}
+    if(currentFocus==='black'){n.textContent=pgnHeaders.Black||'Black';s.textContent='Black'+(pgnHeaders.BlackElo?' • '+pgnHeaders.BlackElo:'');return;}
+    if(mySide==='white'){n.textContent=pgnHeaders.White||'Me';s.textContent='Me • White'+(pgnHeaders.WhiteElo?' • '+pgnHeaders.WhiteElo:'');}
+    else if(mySide==='black'){n.textContent=pgnHeaders.Black||'Me';s.textContent='Me • Black'+(pgnHeaders.BlackElo?' • '+pgnHeaders.BlackElo:'');}
+    else {n.textContent='Focus on Me';s.textContent='Could not identify your username — showing both players.';}
+  }
+
+  function renderFocusedReview(){
+    updateFocusHeader();
+    if(!batchRows.length)return;
+    const rows=batchRows.filter(rowMatchesFocus);
+    document.getElementById('sumBest').textContent=rows.filter(r=>['Best','Excellent','Checkmate','Mate found'].includes(r.rating.label)).length;
+    document.getElementById('sumGood').textContent=rows.filter(r=>['Good','Inaccuracy'].includes(r.rating.label)).length;
+    document.getElementById('sumBad').textContent=rows.filter(r=>['Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label)).length;
+    const key=[...rows].filter(r=>r.loss>20||r.isMateEvent).sort((a,b)=>(b.isMateEvent?9999:b.loss)-(a.isMateEvent?9999:a.loss)).slice(0,6);
+    const box=document.getElementById('keyMoves'); box.innerHTML='';
+    if(!key.length){box.innerHTML='<div class="small">No major evaluation swings found for this player.</div>';return;}
+    key.forEach(r=>{
+      const btn=document.createElement('button'); btn.type='button'; btn.className='keyMove';
+      btn.innerHTML='<div class="keyMoveMove">'+r.moveNo+(r.side==='White'?'.':'…')+' '+r.actualSan+'</div>'+
+      '<div><div class="'+r.rating.cls+'" style="font-weight:700">'+r.rating.label+'</div><div class="keyMoveMeta">'+r.side+' • Best: '+r.bestSan+'</div></div>'+
+      '<div class="keyMoveLoss">'+(r.isMateEvent?'Mate':'-'+(r.loss/100).toFixed(2))+'</div>';
+      btn.addEventListener('click',()=>{showBatchMove(r.i);switchTab('coachTab');});
+      box.appendChild(btn);
+    });
+  }
 
   function squareNames(){
     const fs=orientation==='white'
@@ -613,6 +703,9 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     }
 
     loadedMoves=temp.history();
+    pgnHeaders=parseHeaders(pgn);
+    detectMySide();
+    updateFocusHeader();
 
     game=new Chess();
     cursor=0;
@@ -987,41 +1080,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     batchRows=rows;
 
-    const bestCount=rows.filter(r=>['Best','Excellent','Checkmate','Mate found'].includes(r.rating.label)).length;
-    const goodCount=rows.filter(r=>['Good','Inaccuracy'].includes(r.rating.label)).length;
-    const badCount=rows.filter(r=>['Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label)).length;
-    document.getElementById('sumBest').textContent=bestCount;
-    document.getElementById('sumGood').textContent=goodCount;
-    document.getElementById('sumBad').textContent=badCount;
-
-    const key=[...rows]
-      .filter(r=>r.loss>20||r.isMateEvent)
-      .sort((a,b)=>{
-        const rank=x=>x.rating.label==='Mate allowed'||x.rating.label==='Mate missed'?10000:
-          x.rating.label==='Checkmate'||x.rating.label==='Mate found'?5000:x.loss;
-        return rank(b)-rank(a);
-      })
-      .slice(0,6);
-
-    const box=document.getElementById('keyMoves');
-    box.innerHTML='';
-
-    if(!key.length){
-      box.innerHTML='<div class="small">No major evaluation swings found at this review depth.</div>';
-    }else{
-      key.forEach(r=>{
-        const btn=document.createElement('button');
-        btn.type='button';
-        btn.className='keyMove';
-        btn.innerHTML=
-          '<div class="keyMoveMove">'+r.moveNo+(r.side==='White'?'.':'…')+' '+r.actualSan+'</div>'+
-          '<div><div class="'+r.rating.cls+'" style="font-weight:700">'+r.rating.label+'</div>'+
-          '<div class="keyMoveMeta">Best: '+r.bestSan+'</div></div>'+
-          '<div class="keyMoveLoss">'+(r.isMateEvent?'Mate':'-'+(r.loss/100).toFixed(2))+'</div>';
-        btn.addEventListener('click',()=>showBatchMove(r.i));
-        box.appendChild(btn);
-      });
-    }
+    renderFocusedReview();
 
     document.getElementById('gameReviewStatus').textContent='Full game review complete • '+rows.length+' moves classified.';
     document.getElementById('analyzeGameBtn').disabled=false;
@@ -1432,6 +1491,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   document.getElementById('analyzeGameBtn').addEventListener('click',startFullGameReview);
   document.getElementById('trainBtn').addEventListener('click',startPuzzle);
   document.getElementById('revealBtn').addEventListener('click',revealPuzzle);
+
+  document.querySelectorAll('.tabBtn').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));
+  document.querySelectorAll('.focusBtn').forEach(btn=>btn.addEventListener('click',()=>{
+    currentFocus=btn.dataset.focus;
+    document.querySelectorAll('.focusBtn').forEach(b=>b.classList.remove('activeFocus'));
+    btn.classList.add('activeFocus');
+    renderFocusedReview();
+  }));
   document.getElementById('autoAnalyze').addEventListener('change',e=>{
     if(e.target.checked)scheduleAutoAnalysis();
     else{
