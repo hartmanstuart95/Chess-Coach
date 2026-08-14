@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.5</title>
+<title>Chess Coach v0.6</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -52,13 +52,21 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .reviewBig{font-size:21px;font-weight:800}
 .reviewText{margin-top:10px;padding:11px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.5}
 .classBest{color:#86efac}.classExcellent{color:#a7f3d0}.classGood{color:#bfdbfe}.classInaccuracy{color:#fde68a}.classMistake{color:#fdba74}.classBlunder{color:#fca5a5}
+.progressTrack{height:9px;background:#101218;border:1px solid #343a46;border-radius:999px;overflow:hidden;margin-top:10px}
+.progressFill{height:100%;width:0%;background:#0ea5e9;transition:width .2s ease}
+.summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.summaryBox{background:#101218;border:1px solid #343a46;border-radius:10px;padding:9px;text-align:center}
+.summaryNum{font-size:20px;font-weight:800}.summaryName{font-size:11px;color:var(--muted);margin-top:2px}
+.keyMoves{margin-top:12px;display:flex;flex-direction:column;gap:7px}
+.keyMove{display:grid;grid-template-columns:56px 1fr auto;gap:9px;align-items:center;width:100%;text-align:left;padding:9px 10px;background:#101218;border:1px solid #343a46;border-radius:10px}
+.keyMove:hover{background:#171b22}.keyMoveMove{font-weight:800}.keyMoveMeta{font-size:12px;color:var(--muted)}.keyMoveLoss{font-weight:800}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.5</h1>
-<div class="sub">Live Stockfish guidance + move-by-move coaching.</div>
+<h1>Chess Coach v0.6</h1>
+<div class="sub">Live Stockfish guidance + full-game learning review.</div>
 
 <div class="layout">
   <div>
@@ -135,6 +143,27 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     </div>
 
     <div class="card">
+      <div class="badge">GAME REVIEW</div>
+      <strong> Analyze the full game</strong>
+      <p class="small">Stockfish will evaluate every position once, classify every move, and surface the biggest learning opportunities.</p>
+      <button id="analyzeGameBtn" class="primary">Analyze full game</button>
+      <div id="gameReviewStatus" class="small" style="margin-top:8px">Load a PGN to begin.</div>
+      <div class="progressTrack"><div id="gameReviewProgress" class="progressFill"></div></div>
+
+      <div class="summaryGrid">
+        <div class="summaryBox"><div id="sumBest" class="summaryNum">—</div><div class="summaryName">Best / Excellent</div></div>
+        <div class="summaryBox"><div id="sumGood" class="summaryNum">—</div><div class="summaryName">Good / Inaccuracy</div></div>
+        <div class="summaryBox"><div id="sumBad" class="summaryNum">—</div><div class="summaryName">Mistakes / Blunders</div></div>
+      </div>
+
+      <div style="margin-top:14px;font-weight:700">Key learning positions</div>
+      <div id="keyMoves" class="keyMoves">
+        <div class="small">Your biggest evaluation swings will appear here.</div>
+      </div>
+      <div class="small" style="margin-top:8px">Batch review uses depth 8 for speed on iPad. Tap a flagged move for the deeper coaching panel.</div>
+    </div>
+
+    <div class="card">
       <div class="badge">COACH</div>
       <strong> Review the move</strong>
       <p class="small">Go to any move in the game, then compare the move that was played with Stockfish's best choice.</p>
@@ -204,6 +233,12 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let reviewStage=null;
   let reviewData=null;
   let reviewInfo={score:null,mate:null,pv:[],depth:0};
+  let batchMode=null;
+  let batchPositions=[];
+  let batchEvaluations=[];
+  let batchIndex=0;
+  let batchInfo={score:null,mate:null,pv:[],depth:0};
+  let batchRows=[];
 
   function squareNames(){
     const fs=orientation==='white'
@@ -464,6 +499,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     feedbackEl.textContent='PGN loaded: '+loadedMoves.length+' half-moves.';
     feedbackEl.className='small ok';
+    resetBatchUI();
+    document.getElementById('gameReviewStatus').textContent='Ready to analyze '+loadedMoves.length+' half-moves.';
 
     rebuildTo(loadedMoves.length);
   });
@@ -687,8 +724,264 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     }
   }
 
+  function buildBatchPositions(){
+    const g=new Chess();
+    const positions=[{fen:g.fen(),turn:g.turn(),moveIndex:0}];
+    const actual=[];
+
+    for(let i=0;i<loadedMoves.length;i++){
+      const m=g.move(loadedMoves[i]);
+      if(!m)throw new Error('Could not rebuild move '+(i+1));
+      actual.push({
+        san:m.san,
+        uci:m.from+m.to+(m.promotion||''),
+        from:m.from,
+        to:m.to,
+        promotion:m.promotion||''
+      });
+      positions.push({fen:g.fen(),turn:g.turn(),moveIndex:i+1});
+    }
+    return {positions,actual};
+  }
+
+  function resetBatchUI(){
+    document.getElementById('gameReviewProgress').style.width='0%';
+    document.getElementById('sumBest').textContent='—';
+    document.getElementById('sumGood').textContent='—';
+    document.getElementById('sumBad').textContent='—';
+    document.getElementById('keyMoves').innerHTML='<div class="small">Your biggest evaluation swings will appear here.</div>';
+  }
+
+  function startBatchPosition(){
+    if(batchIndex>=batchPositions.length){
+      finishFullGameReview();
+      return;
+    }
+
+    batchInfo={score:null,mate:null,pv:[],depth:0};
+    const p=batchPositions[batchIndex];
+    const pct=Math.round((batchIndex/batchPositions.length)*100);
+    document.getElementById('gameReviewProgress').style.width=pct+'%';
+    document.getElementById('gameReviewStatus').textContent='Analyzing position '+(batchIndex+1)+' of '+batchPositions.length+'…';
+
+    engine.postMessage('stop');
+    engine.postMessage('position fen '+p.fen);
+    engine.postMessage('go depth 8');
+  }
+
+  function finishFullGameReview(){
+    document.getElementById('gameReviewProgress').style.width='100%';
+
+    const built=buildBatchPositions();
+    const actual=built.actual;
+    const rows=[];
+
+    for(let i=0;i<actual.length;i++){
+      const before=batchEvaluations[i];
+      const after=batchEvaluations[i+1];
+      if(!before||!after)continue;
+
+      const beforeWhite=scoreToWhiteCp(before.score,before.mate,batchPositions[i].turn);
+      const afterWhite=scoreToWhiteCp(after.score,after.mate,batchPositions[i+1].turn);
+      const mover=batchPositions[i].turn;
+      const beforeMover=mover==='w'?beforeWhite:-beforeWhite;
+      const afterMover=mover==='w'?afterWhite:-afterWhite;
+      const loss=Math.max(0,beforeMover-afterMover);
+
+      const bestUci=before.bestmove||'';
+      const exactBest=actual[i].uci===bestUci;
+      const rating=classifyMove(loss,exactBest);
+      const bestSan=bestUci&&bestUci!=='(none)'?uciToSan(batchPositions[i].fen,bestUci):'—';
+
+      rows.push({
+        i,
+        moveNo:Math.floor(i/2)+1,
+        side:i%2===0?'White':'Black',
+        actualSan:actual[i].san,
+        actualUci:actual[i].uci,
+        bestUci,
+        bestSan,
+        loss,
+        rating,
+        before,
+        after
+      });
+    }
+
+    batchRows=rows;
+
+    const bestCount=rows.filter(r=>r.rating.label==='Best'||r.rating.label==='Excellent').length;
+    const goodCount=rows.filter(r=>r.rating.label==='Good'||r.rating.label==='Inaccuracy').length;
+    const badCount=rows.filter(r=>r.rating.label==='Mistake'||r.rating.label==='Blunder').length;
+    document.getElementById('sumBest').textContent=bestCount;
+    document.getElementById('sumGood').textContent=goodCount;
+    document.getElementById('sumBad').textContent=badCount;
+
+    const key=[...rows]
+      .filter(r=>r.loss>20)
+      .sort((a,b)=>b.loss-a.loss)
+      .slice(0,6);
+
+    const box=document.getElementById('keyMoves');
+    box.innerHTML='';
+
+    if(!key.length){
+      box.innerHTML='<div class="small">No major evaluation swings found at this review depth.</div>';
+    }else{
+      key.forEach(r=>{
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.className='keyMove';
+        btn.innerHTML=
+          '<div class="keyMoveMove">'+r.moveNo+(r.side==='White'?'.':'…')+' '+r.actualSan+'</div>'+
+          '<div><div class="'+r.rating.cls+'" style="font-weight:700">'+r.rating.label+'</div>'+
+          '<div class="keyMoveMeta">Best: '+r.bestSan+'</div></div>'+
+          '<div class="keyMoveLoss">-'+(r.loss/100).toFixed(2)+'</div>';
+        btn.addEventListener('click',()=>showBatchMove(r.i));
+        box.appendChild(btn);
+      });
+    }
+
+    document.getElementById('gameReviewStatus').textContent='Full game review complete • '+rows.length+' moves classified.';
+    document.getElementById('analyzeGameBtn').disabled=false;
+    document.getElementById('analyzeGameBtn').textContent='Analyze full game again';
+    batchMode=null;
+
+    if(document.getElementById('autoAnalyze')?.checked)scheduleAutoAnalysis();
+  }
+
+  function showBatchMove(i){
+    const r=batchRows.find(x=>x.i===i);
+    if(!r)return;
+
+    jumpToMove(i+1);
+
+    document.getElementById('reviewActual').textContent=r.actualSan;
+    document.getElementById('reviewBest').textContent=r.bestSan;
+    document.getElementById('reviewLoss').textContent=(r.loss/100).toFixed(2);
+    const classEl=document.getElementById('reviewClass');
+    classEl.textContent=r.rating.label;
+    classEl.className='reviewBig '+r.rating.cls;
+
+    let explanation='';
+    if(r.rating.label==='Best'){
+      explanation='You found Stockfish’s top move in this position.';
+    }else if(r.rating.label==='Excellent'||r.rating.label==='Good'){
+      explanation='Your move was playable, but Stockfish slightly preferred '+r.bestSan+'. Compare the resulting piece activity and threats.';
+    }else if(r.rating.label==='Inaccuracy'){
+      explanation='This gave away some of your advantage. Before '+r.actualSan+', check whether '+r.bestSan+' creates a stronger forcing sequence.';
+    }else if(r.rating.label==='Mistake'){
+      explanation='This caused a meaningful evaluation swing. Recalculate the position before '+r.actualSan+' and look at your opponent’s checks, captures, and threats. Stockfish preferred '+r.bestSan+'.';
+    }else{
+      explanation='This was one of the game’s biggest turning points. Ask what tactical or positional resource became available after '+r.actualSan+'. Stockfish wanted '+r.bestSan+'.';
+    }
+    document.getElementById('reviewExplain').textContent=explanation;
+    document.getElementById('reviewStatus').textContent='Loaded from full-game review. Tap Review current move for a deeper depth-10 check.';
+
+    bestMoveHighlight=r.bestUci&&r.bestUci!=='(none)'?{from:r.bestUci.slice(0,2),to:r.bestUci.slice(2,4)}:null;
+    render();
+  }
+
+  function jumpToMove(n){
+    const rebuilt=new Chess();
+    let lm=null;
+    for(let i=0;i<n;i++){
+      const m=rebuilt.move(loadedMoves[i]);
+      if(!m)return;
+      lm={from:m.from,to:m.to};
+    }
+    game=rebuilt;
+    cursor=n;
+    lastMove=lm;
+    selected=null;
+    legalTargets=[];
+    clearEngineDisplay();
+    render();
+  }
+
+  function startFullGameReview(){
+    if(!loadedMoves.length){
+      document.getElementById('gameReviewStatus').textContent='Load a PGN first.';
+      return;
+    }
+
+    clearTimeout(analysisTimer);
+    if(engine)engine.postMessage('stop');
+
+    try{
+      const built=buildBatchPositions();
+      batchPositions=built.positions;
+    }catch(e){
+      document.getElementById('gameReviewStatus').textContent=e.message;
+      return;
+    }
+
+    resetBatchUI();
+    batchEvaluations=[];
+    batchRows=[];
+    batchIndex=0;
+    batchMode='waiting';
+
+    const btn=document.getElementById('analyzeGameBtn');
+    btn.disabled=true;
+    btn.textContent='Analyzing game…';
+    document.getElementById('gameReviewStatus').textContent='Preparing Stockfish…';
+
+    const begin=()=>{
+      batchMode='running';
+      startBatchPosition();
+    };
+
+    if(engineReady&&engine){
+      begin();
+    }else{
+      initEngine();
+    }
+  }
+
   function handleEngineLine(line){
     if(typeof line!=='string')return;
+
+    if(batchMode){
+      if(line==='uciok'){
+        engine.postMessage('isready');
+        return;
+      }
+      if(line==='readyok'){
+        engineReady=true;
+        engineLoading=false;
+        document.getElementById('engineStatus').textContent='Engine ready.';
+        if(batchMode==='waiting'){
+          batchMode='running';
+          startBatchPosition();
+        }
+        return;
+      }
+      if(batchMode==='running'&&line.startsWith('info ')){
+        const depthMatch=line.match(/\bdepth (\d+)/);
+        const cpMatch=line.match(/\bscore cp (-?\d+)/);
+        const mateMatch=line.match(/\bscore mate (-?\d+)/);
+        const pvIndex=line.indexOf(' pv ');
+        if(depthMatch)batchInfo.depth=parseInt(depthMatch[1],10);
+        if(cpMatch){batchInfo.score=parseInt(cpMatch[1],10);batchInfo.mate=null;}
+        if(mateMatch){batchInfo.mate=parseInt(mateMatch[1],10);batchInfo.score=null;}
+        if(pvIndex>=0)batchInfo.pv=line.slice(pvIndex+4).trim().split(/\s+/);
+        return;
+      }
+      if(batchMode==='running'&&line.startsWith('bestmove ')){
+        const bm=line.split(/\s+/)[1]||'(none)';
+        batchEvaluations[batchIndex]={
+          score:batchInfo.score,
+          mate:batchInfo.mate,
+          pv:batchInfo.pv,
+          depth:batchInfo.depth,
+          bestmove:bm
+        };
+        batchIndex++;
+        startBatchPosition();
+        return;
+      }
+    }
 
     if(reviewStage&&reviewStage!=='waiting'){
       if(line.startsWith('info ')){
@@ -733,7 +1026,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       engineReady=true;
       engineLoading=false;
       document.getElementById('engineStatus').textContent='Engine ready.';
-      if(reviewStage!=='waiting')runAnalysis();
+      if(reviewStage!=='waiting'&&!batchMode)runAnalysis();
       return;
     }
 
@@ -838,6 +1131,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
   document.getElementById('analyzeBtn').addEventListener('click',initEngine);
   document.getElementById('reviewMoveBtn').addEventListener('click',startMoveReview);
+  document.getElementById('analyzeGameBtn').addEventListener('click',startFullGameReview);
   document.getElementById('autoAnalyze').addEventListener('change',e=>{
     if(e.target.checked)scheduleAutoAnalysis();
     else{
