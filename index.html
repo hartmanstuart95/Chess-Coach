@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.3.1</title>
+<title>Chess Coach v0.4</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -11,11 +11,15 @@
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.wrap{max-width:1100px;margin:0 auto;padding:16px}
-h1{font-size:26px;margin:0 0 6px}.sub{color:var(--muted);margin-bottom:14px}
-.layout{display:grid;grid-template-columns:minmax(0,680px) minmax(300px,1fr);gap:18px;align-items:start}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+h1{font-size:30px;letter-spacing:-.6px;margin:0 0 5px}.sub{color:var(--muted);margin-bottom:18px}
+.layout{display:grid;grid-template-columns:minmax(0,700px) minmax(320px,1fr);gap:22px;align-items:start}
 @media(max-width:860px){.layout{grid-template-columns:1fr}}
-.board{width:min(92vw,680px);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);border-radius:12px;overflow:hidden;border:1px solid #333;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.boardShell{display:grid;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:stretch}
+.evalBar{position:relative;border-radius:8px;overflow:hidden;background:#f1f1ed;border:1px solid #343a46;min-height:100%}
+.evalBlack{position:absolute;left:0;right:0;top:0;height:50%;background:#17191e;transition:height .25s ease}
+.evalTag{position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);font-size:10px;font-weight:800;white-space:nowrap;color:#9ca3af;text-shadow:0 1px 2px #000}
+.board{width:min(90vw,680px);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);border-radius:14px;overflow:hidden;border:1px solid #3a3e48;box-shadow:0 12px 34px rgba(0,0,0,.22);touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:clamp(30px,7.4vw,64px);line-height:1;border:0;padding:0;cursor:pointer}
 .light{background:var(--light);color:#111}.dark{background:var(--dark);color:#111}
 .sq.selected{outline:5px solid var(--sel);outline-offset:-5px}
@@ -23,13 +27,17 @@ h1{font-size:26px;margin:0 0 6px}.sub{color:var(--muted);margin-bottom:14px}
 .dot{position:absolute;width:22%;aspect-ratio:1;border-radius:50%;background:rgba(20,20,20,.28)}
 .coord{position:absolute;font-size:10px;font-weight:700;opacity:.62}.file{right:3px;bottom:2px}.rank{left:3px;top:2px}
 .piece{position:relative;z-index:1}
-.card{background:var(--panel);border:1px solid #2b303a;border-radius:14px;padding:14px;margin-bottom:12px}
+.card{background:linear-gradient(180deg,#1b1e25,#171a20);border:1px solid #2d323d;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.toolbar button{min-width:72px}
+.toggleRow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 0;border-top:1px solid #2d323d}
+.switch{position:relative;width:48px;height:28px;display:inline-block}.switch input{display:none}.slider{position:absolute;inset:0;background:#3a404c;border-radius:20px;transition:.2s}.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:#0ea5e9}.switch input:checked+.slider:before{transform:translateX(20px)}
 button{appearance:none;border:1px solid #3b4250;background:#252a33;color:var(--text);border-radius:10px;padding:10px 13px;font-size:16px}
 button.primary{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
 textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250;background:#101218;color:var(--text);padding:10px;font-size:14px;resize:vertical}
 .status{font-size:16px;margin:8px 0}.small{font-size:13px;color:var(--muted)}
-.moves{max-height:280px;overflow:auto;line-height:1.8}.movebtn{padding:3px 7px;font-size:14px;margin:2px;border-radius:7px}.activeMove{background:#0ea5e9;border-color:#0ea5e9}
+.moves{max-height:290px;overflow:auto;line-height:1.9;padding-right:4px}.movebtn{padding:4px 8px;font-size:14px;margin:2px;border-radius:8px;background:#232832}.activeMove{background:#0ea5e9!important;border-color:#0ea5e9!important;color:#fff}
 .error{color:#fb7185}.ok{color:#86efac}
 .engineGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .engineStat{background:#101218;border:1px solid #343a46;border-radius:10px;padding:10px}
@@ -43,13 +51,19 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.3.1</h1>
-<div class="sub">Reliable PGN import + interactive board + Stockfish analysis.</div>
+<h1>Chess Coach v0.4</h1>
+<div class="sub">Interactive analysis board with live Stockfish guidance.</div>
 
 <div class="layout">
   <div>
-    <div id="board" class="board" aria-label="Interactive chess board"></div>
-    <div class="row" style="margin-top:10px">
+    <div class="boardShell">
+      <div id="evalBar" class="evalBar">
+        <div id="evalBlack" class="evalBlack"></div>
+        <div id="evalTag" class="evalTag">0.00</div>
+      </div>
+      <div id="board" class="board" aria-label="Interactive chess board"></div>
+    </div>
+    <div class="toolbar">
       <button id="flipBtn">Flip board</button>
       <button id="undoBtn">Undo</button>
       <button id="resetBtn">Reset</button>
@@ -86,6 +100,16 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <strong> Stockfish analysis</strong>
       <p class="small">Analyze the position currently shown on the board.</p>
       <button id="analyzeBtn" class="primary">Analyze position</button>
+      <div class="toggleRow">
+        <div>
+          <div style="font-weight:600">Live analysis</div>
+          <div class="small">Re-analyze when you move through the game.</div>
+        </div>
+        <label class="switch">
+          <input id="autoAnalyze" type="checkbox" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
       <div id="engineStatus" class="small" style="margin-top:8px">Engine not started.</div>
       <div class="engineGrid">
         <div class="engineStat">
@@ -101,7 +125,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         <div class="engineLabel">Best line</div>
         <div id="pvValue">—</div>
       </div>
-      <div class="small" style="margin-top:8px">Stockfish 18 • iPad-compatible engine • runs in your browser</div>
+      <div class="small" style="margin-top:8px">Stockfish 18 • live iPad analysis • depth 12</div>
     </div>
 
     <div class="card">
@@ -138,6 +162,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let engineReady=false;
   let engineLoading=false;
   let lastEngineInfo={depth:0,score:null,mate:null,pv:[]};
+  let analysisTimer=null;
+  let activeAnalysisFen=null;
 
   function squareNames(){
     const fs=orientation==='white'
@@ -270,6 +296,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     feedbackEl.className='small ok';
     clearEngineDisplay();
     render();
+    scheduleAutoAnalysis();
   }
 
   function rebuildTo(n){
@@ -294,6 +321,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     legalTargets=[];
     clearEngineDisplay();
     render();
+    scheduleAutoAnalysis();
   }
 
   function renderMoves(){
@@ -338,6 +366,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     feedbackEl.className='small';
     clearEngineDisplay();
     render();
+    scheduleAutoAnalysis();
   });
 
   document.getElementById('undoBtn').addEventListener('click',()=>{
@@ -401,6 +430,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     document.getElementById('evalValue').textContent='—';
     document.getElementById('bestMoveValue').textContent='—';
     document.getElementById('pvValue').textContent='—';
+    setEvalBar(0);
     lastEngineInfo={depth:0,score:null,mate:null,pv:[]};
   }
 
@@ -435,12 +465,32 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     }
   }
 
+  function setEvalBar(value){
+    const black=document.getElementById('evalBlack');
+    const tag=document.getElementById('evalTag');
+    if(!black||!tag)return;
+
+    if(typeof value==='string'&&value.startsWith('M')){
+      const whiteWinning=!value.startsWith('-');
+      black.style.height=whiteWinning?'8%':'92%';
+      tag.textContent=value;
+      return;
+    }
+
+    const v=Math.max(-8,Math.min(8,Number(value)||0));
+    const whitePct=50+(v/8)*42;
+    black.style.height=(100-whitePct)+'%';
+    tag.textContent=(v>0?'+':'')+v.toFixed(2);
+  }
+
   function displayScore(){
     const evalEl=document.getElementById('evalValue');
     if(lastEngineInfo.mate!==null){
       let m=lastEngineInfo.mate;
       if(game.turn()==='b')m=-m;
-      evalEl.textContent=(m>0?'M'+m:'-M'+Math.abs(m));
+      const text=(m>0?'M'+m:'-M'+Math.abs(m));
+      evalEl.textContent=text;
+      setEvalBar(text);
       return;
     }
     if(lastEngineInfo.score===null)return;
@@ -448,10 +498,12 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     if(game.turn()==='b')cp=-cp;
     const pawns=cp/100;
     evalEl.textContent=(pawns>0?'+':'')+pawns.toFixed(2);
+    setEvalBar(pawns);
   }
 
   function handleEngineLine(line){
     if(typeof line!=='string')return;
+    if(activeAnalysisFen&&activeAnalysisFen!==game.fen()&&line.startsWith('info '))return;
 
     if(line==='uciok'){
       engine.postMessage('isready');
@@ -547,14 +599,32 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     if(!engineReady||!engine)return;
 
     clearEngineDisplay();
+    activeAnalysisFen=game.fen();
     document.getElementById('engineStatus').textContent='Analyzing…';
 
     engine.postMessage('stop');
-    engine.postMessage('position fen '+game.fen());
+    engine.postMessage('position fen '+activeAnalysisFen);
     engine.postMessage('go depth 12');
   }
 
+  function scheduleAutoAnalysis(){
+    if(!document.getElementById('autoAnalyze')?.checked)return;
+    clearTimeout(analysisTimer);
+    analysisTimer=setTimeout(()=>{
+      if(engineReady)runAnalysis();
+      else initEngine();
+    },260);
+  }
+
   document.getElementById('analyzeBtn').addEventListener('click',initEngine);
+  document.getElementById('autoAnalyze').addEventListener('change',e=>{
+    if(e.target.checked)scheduleAutoAnalysis();
+    else{
+      clearTimeout(analysisTimer);
+      if(engine)engine.postMessage('stop');
+      document.getElementById('engineStatus').textContent='Live analysis paused.';
+    }
+  });
 
 
   if(typeof Chess==='undefined'){
