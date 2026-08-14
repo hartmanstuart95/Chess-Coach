@@ -33,12 +33,12 @@ textarea{width:100%;min-height:145px;border-radius:10px;border:1px solid #3b4250
 <body>
 <div class="wrap">
 <h1>Chess Coach v0.1.1</h1>
-<div class="sub">Self-contained iPad version â no external libraries required.</div>
+<div class="sub">Self-contained iPad version — no external libraries required.</div>
 <div class="layout">
 <div>
 <div id="board" class="board" aria-label="Interactive chess board"></div>
 <div class="row" style="margin-top:10px">
-<button id="flipBtn">Flip board</button><button id="undoBtn">Undo</button><button id="resetBtn">Reset</button><button id="backBtn">â Back</button><button id="forwardBtn">Forward â¶</button>
+<button id="flipBtn">Flip board</button><button id="undoBtn">Undo</button><button id="resetBtn">Reset</button><button id="backBtn">◀ Back</button><button id="forwardBtn">Forward ▶</button>
 </div>
 <div id="status" class="status"></div>
 <div id="feedback" class="small" aria-live="polite">Tap a piece to see legal moves.</div>
@@ -58,7 +58,7 @@ textarea{width:100%;min-height:145px;border-radius:10px;border:1px solid #3b4250
 
 <script>
 (function(){
-const U={wK:'â',wQ:'â',wR:'â',wB:'â',wN:'â',wP:'â',bK:'â',bQ:'â',bR:'â',bB:'â',bN:'â',bP:'â'};
+const U={wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'};
 const files='abcdefgh';
 const S=()=>({
 board:initialBoard(),turn:'w',castle:{wK:true,wQ:true,bK:true,bQ:true},ep:null,half:0,full:1,last:null
@@ -240,7 +240,7 @@ function render(){
    d.addEventListener('click',()=>tap(s));boardEl.appendChild(d);
  }
  const lm=legalMoves(st);let txt=st.turn==='w'?'White to move':'Black to move';
- if(inCheck(st))txt+=lm.length?' â Check':' â Checkmate';else if(!lm.length)txt+=' â Stalemate';
+ if(inCheck(st))txt+=lm.length?' — Check':' — Checkmate';else if(!lm.length)txt+=' — Stalemate';
  statusEl.textContent=txt;fenEl.textContent=fen(st);renderMoves();
 }
 function tap(s){
@@ -263,7 +263,7 @@ document.getElementById('resetBtn').addEventListener('click',()=>{st=S();history
 document.getElementById('undoBtn').addEventListener('click',()=>{if(cursor>0)jump(cursor-1)});
 document.getElementById('backBtn').addEventListener('click',()=>{if(cursor>0)jump(cursor-1)});
 document.getElementById('forwardBtn').addEventListener('click',()=>{if(cursor<sans.length)jump(cursor+1)});
-document.getElementById('sampleBtn').addEventListener('click',()=>{pgnInput.value='[White "AFake46"]\\n[Black "sjh002"]\\n[Result "0-1"]\\n\\n1. e4 c5 2. c4 Nf6 3. f4 Nxe4 4. Nc3 Nf6 5. Nd5 Ne4 6. Bd3 Nd6 7. Nf3 e6 8. Ne5 exd5 9. cxd5 f6 10. Ng4 f5 11. Qe2+ Be7 12. Nf2 O-O 13. g4 Bh4 14. Rg1 Re8 15. gxf5 Rxe2+ 16. Kxe2 Qe7+ 17. Kf3 b6 18. f6 Qxf6 19. Ng4 Qd4 20. Be2 Qxd5+ 21. Ke3 Nf5# 0-1';feedbackEl.textContent='Sample inserted â tap Load PGN.';feedbackEl.className='small'});
+document.getElementById('sampleBtn').addEventListener('click',()=>{pgnInput.value='[White "AFake46"]\\n[Black "sjh002"]\\n[Result "0-1"]\\n\\n1. e4 c5 2. c4 Nf6 3. f4 Nxe4 4. Nc3 Nf6 5. Nd5 Ne4 6. Bd3 Nd6 7. Nf3 e6 8. Ne5 exd5 9. cxd5 f6 10. Ng4 f5 11. Qe2+ Be7 12. Nf2 O-O 13. g4 Bh4 14. Rg1 Re8 15. gxf5 Rxe2+ 16. Kxe2 Qe7+ 17. Kf3 b6 18. f6 Qxf6 19. Ng4 Qd4 20. Be2 Qxd5+ 21. Ke3 Nf5# 0-1';feedbackEl.textContent='Sample inserted — tap Load PGN.';feedbackEl.className='small'});
 document.getElementById('loadBtn').addEventListener('click',()=>{try{const n=loadPGN(pgnInput.value.trim());feedbackEl.textContent='PGN loaded: '+n+' half-moves.';feedbackEl.className='small ok';render()}catch(e){feedbackEl.textContent=e.message;feedbackEl.className='small error'}});
 render();
 })();
