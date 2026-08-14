@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.6.1</title>
+<title>Chess Coach v0.7</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -60,13 +60,17 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .keyMoves{margin-top:12px;display:flex;flex-direction:column;gap:7px}
 .keyMove{display:grid;grid-template-columns:56px 1fr auto;gap:9px;align-items:center;width:100%;text-align:left;padding:9px 10px;background:#101218;border:1px solid #343a46;border-radius:10px}
 .keyMove:hover{background:#171b22}.keyMoveMove{font-weight:800}.keyMoveMeta{font-size:12px;color:var(--muted)}.keyMoveLoss{font-weight:800}
-.badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
+.lessonBox{background:#101218;border:1px solid #343a46;border-radius:12px;padding:12px;margin-top:10px}
+.lessonTitle{font-weight:800;margin-bottom:5px}.lessonPrompt{line-height:1.45}
+.lessonActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.puzzleStatus{margin-top:10px;font-weight:700}.puzzleGood{color:#86efac}.puzzleTry{color:#fde68a}
+.hiddenAnswer{filter:blur(6px);user-select:none}.badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.6.1</h1>
-<div class="sub">Live Stockfish guidance + full-game learning review.</div>
+<h1>Chess Coach v0.7</h1>
+<div class="sub">Your games become your personalized chess lessons.</div>
 
 <div class="layout">
   <div>
@@ -195,6 +199,26 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     </div>
 
     <div class="card">
+      <div class="badge">TEACH ME</div>
+      <strong> Turn mistakes into training</strong>
+      <p class="small">After a full-game review, choose a key learning position and Chess Coach will turn it into a mini-lesson from your own game.</p>
+      <div class="lessonBox">
+        <div class="reviewLabel">Pattern to notice</div>
+        <div id="lessonTheme" class="lessonTitle">Choose a key learning position.</div>
+        <div id="lessonWhy" class="lessonPrompt small">We’ll focus on the thinking process, not just the engine answer.</div>
+      </div>
+      <div class="lessonBox">
+        <div class="reviewLabel">Better thought process</div>
+        <div id="lessonThink" class="lessonPrompt">Checks → Captures → Threats → loose pieces → king safety.</div>
+      </div>
+      <div class="lessonActions">
+        <button id="trainBtn" class="primary">Try this position</button>
+        <button id="revealBtn">Reveal best move</button>
+      </div>
+      <div id="puzzleStatus" class="small" style="margin-top:10px">Select a key learning position first.</div>
+    </div>
+
+    <div class="card">
       <strong>Current position</strong>
       <div class="small">FEN</div>
       <div id="fen" style="word-break:break-all;margin-top:5px"></div>
@@ -239,6 +263,10 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let batchIndex=0;
   let batchInfo={score:null,mate:null,pv:[],depth:0};
   let batchRows=[];
+  let activeLessonRow=null;
+  let puzzleMode=false;
+  let puzzleExpectedUci=null;
+  let puzzleMoveIndex=null;
 
   function squareNames(){
     const fs=orientation==='white'
@@ -360,6 +388,30 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     lastMove={from:move.from,to:move.to};
     selected=null;
     legalTargets=[];
+
+    if(puzzleMode){
+      const playedUci=move.from+move.to+(move.promotion||'');
+      const r=activeLessonRow;
+      puzzleMode=false;
+
+      if(playedUci===puzzleExpectedUci){
+        document.getElementById('puzzleStatus').className='puzzleStatus puzzleGood';
+        document.getElementById('puzzleStatus').textContent='✓ You found it: '+move.san+'. Now say WHY it works—that explanation is the learning.';
+        document.getElementById('reviewBest').textContent=r?r.bestSan:move.san;
+      }else{
+        document.getElementById('puzzleStatus').className='puzzleStatus puzzleTry';
+        document.getElementById('puzzleStatus').textContent='Not Stockfish’s top choice. You played '+move.san+'. Reset the puzzle and run Checks → Captures → Threats again, or reveal the answer.';
+      }
+
+      // Restore the original game line rather than replacing the imported PGN.
+      const wasCorrect=playedUci===puzzleExpectedUci;
+      jumpToMove(puzzleMoveIndex);
+      if(wasCorrect&&r){
+        bestMoveHighlight={from:r.bestUci.slice(0,2),to:r.bestUci.slice(2,4)};
+        render();
+      }
+      return;
+    }
 
     if(cursor<loadedMoves.length){
       loadedMoves=loadedMoves.slice(0,cursor);
@@ -500,6 +552,12 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     feedbackEl.textContent='PGN loaded: '+loadedMoves.length+' half-moves.';
     feedbackEl.className='small ok';
     resetBatchUI();
+    activeLessonRow=null;
+    puzzleMode=false;
+    document.getElementById('lessonTheme').textContent='Choose a key learning position.';
+    document.getElementById('lessonWhy').textContent='We’ll focus on the thinking process, not just the engine answer.';
+    document.getElementById('lessonThink').textContent='Checks → Captures → Threats → loose pieces → king safety.';
+    document.getElementById('puzzleStatus').textContent='Select a key learning position first.';
     document.getElementById('gameReviewStatus').textContent='Ready to analyze '+loadedMoves.length+' half-moves.';
 
     rebuildTo(loadedMoves.length);
@@ -902,10 +960,118 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     if(document.getElementById('autoAnalyze')?.checked)scheduleAutoAnalysis();
   }
 
+  function lessonForRow(r){
+    if(!r)return {theme:'Choose a key learning position.',why:'We’ll focus on the thinking process, not just the engine answer.',think:'Checks → Captures → Threats → loose pieces → king safety.'};
+
+    if(r.rating.label==='Mate allowed'){
+      return {
+        theme:'King safety — you allowed a forced mate',
+        why:'The position became tactically decisive after '+r.actualSan+'. Before making a move near an exposed king, forcing replies must come first.',
+        think:'Before I move: 1) What checks does my opponent have? 2) Can I answer every one? 3) Only then consider my own plan.'
+      };
+    }
+    if(r.rating.label==='Mate missed'){
+      return {
+        theme:'Forcing moves — a mating sequence was available',
+        why:'You had a forced mate but chose '+r.actualSan+'. This is a calculation opportunity, not an opening-memory problem.',
+        think:'When the enemy king is exposed, calculate every check first. Don’t stop after finding one good move; look for the forcing finish.'
+      };
+    }
+    if(r.rating.label==='Checkmate'||r.rating.label==='Mate found'){
+      return {
+        theme:'Pattern recognition — mating attack',
+        why:'You correctly found or preserved a forced mating sequence.',
+        think:'Remember what made the attack work: restricted king squares, forcing checks, and pieces coordinating around the king.'
+      };
+    }
+
+    const best=r.bestSan||'the engine move';
+    const captureBest=best.includes('x');
+    const checkBest=best.includes('+')||best.includes('#');
+    const actualCapture=(r.actualSan||'').includes('x');
+
+    if(checkBest){
+      return {
+        theme:'Forcing move — check first',
+        why:'Stockfish preferred '+best+'. A forcing check can change the entire position before slower plans matter.',
+        think:'Run CCT in order: Checks → Captures → Threats. Calculate forcing moves before positional moves.'
+      };
+    }
+    if(captureBest&&!actualCapture){
+      return {
+        theme:'Tactical awareness — a capture was available',
+        why:'You played '+r.actualSan+', but '+best+' was stronger. There was material or a tactical target available immediately.',
+        think:'Before committing: scan every legal capture for both sides. Ask “what is loose, overloaded, pinned, or insufficiently defended?”'
+      };
+    }
+    if(r.loss>=200){
+      return {
+        theme:'Blunder check — opponent’s forcing reply',
+        why:r.actualSan+' caused a large evaluation swing. The useful question is not “why didn’t I find Stockfish’s move?” but “what became possible for my opponent?”',
+        think:'Before releasing the piece: Checks against me → Captures against me → Threats against me. Then ask whether the moved piece was defending something.'
+      };
+    }
+    if(r.loss>=100){
+      return {
+        theme:'Calculation — compare candidate moves',
+        why:'This move gave away a meaningful part of the position. '+best+' was the stronger candidate.',
+        think:'Pick 2–3 candidate moves. For each one, calculate the opponent’s strongest reply—not the reply you hope they play.'
+      };
+    }
+    return {
+      theme:'Move quality — improve the position efficiently',
+      why:'Your move was playable, but '+best+' was more precise.',
+      think:'Ask: What is my worst piece? What is my opponent threatening? Can I improve a piece while creating a threat?'
+    };
+  }
+
+  function loadLesson(r){
+    activeLessonRow=r;
+    const l=lessonForRow(r);
+    document.getElementById('lessonTheme').textContent=l.theme;
+    document.getElementById('lessonWhy').textContent=l.why;
+    document.getElementById('lessonThink').textContent=l.think;
+    document.getElementById('puzzleStatus').textContent='Ready: move '+r.moveNo+(r.side==='White'?'.':'…')+' from your game.';
+  }
+
+  function startPuzzle(){
+    const r=activeLessonRow;
+    if(!r){
+      document.getElementById('puzzleStatus').textContent='Tap a key learning position in Full Game Review first.';
+      return;
+    }
+    puzzleMode=true;
+    puzzleExpectedUci=r.bestUci;
+    puzzleMoveIndex=r.i;
+    jumpToMove(r.i); // position BEFORE the move
+    bestMoveHighlight=null;
+    clearEngineDisplay();
+    document.getElementById('reviewBest').textContent='Hidden';
+    document.getElementById('puzzleStatus').className='puzzleStatus';
+    document.getElementById('puzzleStatus').textContent='Your turn. Find the best move without Stockfish. Use your thinking checklist.';
+    render();
+  }
+
+  function revealPuzzle(){
+    const r=activeLessonRow;
+    if(!r){
+      document.getElementById('puzzleStatus').textContent='Choose a key learning position first.';
+      return;
+    }
+    if(cursor!==r.i)jumpToMove(r.i);
+    bestMoveHighlight=r.bestUci&&r.bestUci!=='(none)'?{from:r.bestUci.slice(0,2),to:r.bestUci.slice(2,4)}:null;
+    document.getElementById('reviewBest').textContent=r.bestSan;
+    document.getElementById('puzzleStatus').className='puzzleStatus';
+    document.getElementById('puzzleStatus').textContent='Best move: '+r.bestSan+'. Now explain to yourself WHY it works before moving on.';
+    puzzleMode=false;
+    render();
+  }
+
   function showBatchMove(i){
     const r=batchRows.find(x=>x.i===i);
     if(!r)return;
 
+    loadLesson(r);
     jumpToMove(i+1);
 
     document.getElementById('reviewActual').textContent=r.actualSan;
@@ -1187,6 +1353,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   document.getElementById('analyzeBtn').addEventListener('click',initEngine);
   document.getElementById('reviewMoveBtn').addEventListener('click',startMoveReview);
   document.getElementById('analyzeGameBtn').addEventListener('click',startFullGameReview);
+  document.getElementById('trainBtn').addEventListener('click',startPuzzle);
+  document.getElementById('revealBtn').addEventListener('click',revealPuzzle);
   document.getElementById('autoAnalyze').addEventListener('change',e=>{
     if(e.target.checked)scheduleAutoAnalysis();
     else{
