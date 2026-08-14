@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.2</title>
+<title>Chess Coach v0.3</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -31,13 +31,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .status{font-size:16px;margin:8px 0}.small{font-size:13px;color:var(--muted)}
 .moves{max-height:280px;overflow:auto;line-height:1.8}.movebtn{padding:3px 7px;font-size:14px;margin:2px;border-radius:7px}.activeMove{background:#0ea5e9;border-color:#0ea5e9}
 .error{color:#fb7185}.ok{color:#86efac}
+.engineGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.engineStat{background:#101218;border:1px solid #343a46;border-radius:10px;padding:10px}
+.engineLabel{font-size:12px;color:var(--muted);margin-bottom:4px}
+.engineValue{font-size:20px;font-weight:700}
+.pv{margin-top:10px;padding:10px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.5}
+.bestFrom{box-shadow:inset 0 0 0 5px rgba(34,197,94,.65)}
+.bestTo{box-shadow:inset 0 0 0 5px rgba(34,197,94,.95)}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.2</h1>
-<div class="sub">Reliable PGN import + interactive analysis board.</div>
+<h1>Chess Coach v0.3</h1>
+<div class="sub">Reliable PGN import + interactive board + Stockfish analysis.</div>
 
 <div class="layout">
   <div>
@@ -75,10 +82,32 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     </div>
 
     <div class="card">
+      <div class="badge">ENGINE</div>
+      <strong> Stockfish analysis</strong>
+      <p class="small">Analyze the position currently shown on the board.</p>
+      <button id="analyzeBtn" class="primary">Analyze position</button>
+      <div id="engineStatus" class="small" style="margin-top:8px">Engine not started.</div>
+      <div class="engineGrid">
+        <div class="engineStat">
+          <div class="engineLabel">Evaluation</div>
+          <div id="evalValue" class="engineValue">—</div>
+        </div>
+        <div class="engineStat">
+          <div class="engineLabel">Best move</div>
+          <div id="bestMoveValue" class="engineValue">—</div>
+        </div>
+      </div>
+      <div class="pv">
+        <div class="engineLabel">Best line</div>
+        <div id="pvValue">—</div>
+      </div>
+      <div class="small" style="margin-top:8px">Stockfish 18 Lite • single-threaded • runs in your browser</div>
+    </div>
+
+    <div class="card">
       <strong>Current position</strong>
       <div class="small">FEN</div>
       <div id="fen" style="word-break:break-all;margin-top:5px"></div>
-      <div class="small" style="margin-top:10px">Next upgrade: Stockfish evaluation + best move.</div>
     </div>
   </div>
 </div>
@@ -104,6 +133,11 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let loadedMoves=[];   // SAN moves from imported/current line
   let cursor=0;         // number of half-moves currently shown
   let lastMove=null;
+  let bestMoveHighlight=null;
+  let engine=null;
+  let engineReady=false;
+  let engineLoading=false;
+  let lastEngineInfo={depth:0,score:null,mate:null,pv:[]};
 
   function squareNames(){
     const fs=orientation==='white'
@@ -135,6 +169,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
       if(selected===sq)div.classList.add('selected');
       if(lastMove&&(lastMove.from===sq||lastMove.to===sq))div.classList.add('last');
+      if(bestMoveHighlight&&bestMoveHighlight.from===sq)div.classList.add('bestFrom');
+      if(bestMoveHighlight&&bestMoveHighlight.to===sq)div.classList.add('bestTo');
 
       const p=game.get(sq);
       if(p){
@@ -232,6 +268,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     feedbackEl.textContent='Played '+move.san;
     feedbackEl.className='small ok';
+    clearEngineDisplay();
     render();
   }
 
@@ -255,6 +292,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     lastMove=lm;
     selected=null;
     legalTargets=[];
+    clearEngineDisplay();
     render();
   }
 
@@ -298,6 +336,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     legalTargets=[];
     feedbackEl.textContent='Board reset.';
     feedbackEl.className='small';
+    clearEngineDisplay();
     render();
   });
 
@@ -356,6 +395,169 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     rebuildTo(loadedMoves.length);
   });
+
+  function clearEngineDisplay(){
+    bestMoveHighlight=null;
+    document.getElementById('evalValue').textContent='—';
+    document.getElementById('bestMoveValue').textContent='—';
+    document.getElementById('pvValue').textContent='—';
+    lastEngineInfo={depth:0,score:null,mate:null,pv:[]};
+  }
+
+  function uciToSan(fen,uci){
+    try{
+      const g=new Chess(fen);
+      const from=uci.slice(0,2),to=uci.slice(2,4);
+      const promotion=uci.length>4?uci[4]:'q';
+      const m=g.move({from,to,promotion});
+      return m?m.san:uci;
+    }catch(e){
+      return uci;
+    }
+  }
+
+  function pvToSan(fen,pv){
+    try{
+      const g=new Chess(fen);
+      const out=[];
+      for(const uci of pv.slice(0,8)){
+        const m=g.move({
+          from:uci.slice(0,2),
+          to:uci.slice(2,4),
+          promotion:uci.length>4?uci[4]:'q'
+        });
+        if(!m)break;
+        out.push(m.san);
+      }
+      return out.join(' ');
+    }catch(e){
+      return pv.slice(0,8).join(' ');
+    }
+  }
+
+  function displayScore(){
+    const evalEl=document.getElementById('evalValue');
+    if(lastEngineInfo.mate!==null){
+      let m=lastEngineInfo.mate;
+      if(game.turn()==='b')m=-m;
+      evalEl.textContent=(m>0?'M'+m:'-M'+Math.abs(m));
+      return;
+    }
+    if(lastEngineInfo.score===null)return;
+    let cp=lastEngineInfo.score;
+    if(game.turn()==='b')cp=-cp;
+    const pawns=cp/100;
+    evalEl.textContent=(pawns>0?'+':'')+pawns.toFixed(2);
+  }
+
+  function handleEngineLine(line){
+    if(typeof line!=='string')return;
+
+    if(line==='uciok'){
+      engine.postMessage('isready');
+      return;
+    }
+    if(line==='readyok'){
+      engineReady=true;
+      engineLoading=false;
+      document.getElementById('engineStatus').textContent='Engine ready.';
+      runAnalysis();
+      return;
+    }
+
+    if(line.startsWith('info ')){
+      const depthMatch=line.match(/\bdepth (\d+)/);
+      const cpMatch=line.match(/\bscore cp (-?\d+)/);
+      const mateMatch=line.match(/\bscore mate (-?\d+)/);
+      const pvIndex=line.indexOf(' pv ');
+
+      if(depthMatch)lastEngineInfo.depth=parseInt(depthMatch[1],10);
+      if(cpMatch){
+        lastEngineInfo.score=parseInt(cpMatch[1],10);
+        lastEngineInfo.mate=null;
+      }
+      if(mateMatch){
+        lastEngineInfo.mate=parseInt(mateMatch[1],10);
+        lastEngineInfo.score=null;
+      }
+      if(pvIndex>=0){
+        lastEngineInfo.pv=line.slice(pvIndex+4).trim().split(/\s+/);
+      }
+
+      displayScore();
+      if(lastEngineInfo.pv.length){
+        document.getElementById('bestMoveValue').textContent=uciToSan(game.fen(),lastEngineInfo.pv[0]);
+        document.getElementById('pvValue').textContent=pvToSan(game.fen(),lastEngineInfo.pv);
+        bestMoveHighlight={from:lastEngineInfo.pv[0].slice(0,2),to:lastEngineInfo.pv[0].slice(2,4)};
+        render();
+      }
+      document.getElementById('engineStatus').textContent='Analyzing… depth '+lastEngineInfo.depth;
+      return;
+    }
+
+    if(line.startsWith('bestmove ')){
+      const bm=line.split(/\s+/)[1];
+      if(bm&&bm!=='(none)'){
+        document.getElementById('bestMoveValue').textContent=uciToSan(game.fen(),bm);
+        bestMoveHighlight={from:bm.slice(0,2),to:bm.slice(2,4)};
+        render();
+      }
+      document.getElementById('engineStatus').textContent='Analysis complete • depth '+lastEngineInfo.depth;
+    }
+  }
+
+  async function initEngine(){
+    if(engineReady){
+      runAnalysis();
+      return;
+    }
+    if(engineLoading)return;
+
+    engineLoading=true;
+    document.getElementById('engineStatus').textContent='Loading Stockfish…';
+
+    try{
+      const jsUrl='https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/stockfish-18-lite-single.js';
+      const wasmUrl='https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/stockfish-18-lite-single.wasm';
+
+      const response=await fetch(jsUrl);
+      if(!response.ok)throw new Error('Could not download engine');
+      let source=await response.text();
+
+      source=source.replaceAll('stockfish-18-lite-single.wasm',wasmUrl);
+
+      const blob=new Blob([source],{type:'text/javascript'});
+      const workerUrl=URL.createObjectURL(blob);
+      engine=new Worker(workerUrl);
+
+      engine.onmessage=e=>handleEngineLine(e.data);
+      engine.onerror=e=>{
+        engineLoading=false;
+        document.getElementById('engineStatus').textContent='Engine failed to start. Refresh and try again.';
+        console.error(e);
+      };
+
+      engine.postMessage('uci');
+    }catch(e){
+      engineLoading=false;
+      document.getElementById('engineStatus').textContent='Could not load Stockfish. Check your internet connection.';
+      console.error(e);
+    }
+  }
+
+  function runAnalysis(){
+    if(!engineReady||!engine)return;
+
+    clearEngineDisplay();
+    document.getElementById('engineStatus').textContent='Analyzing…';
+
+    engine.postMessage('stop');
+    engine.postMessage('position fen '+game.fen());
+    engine.postMessage('go depth 16');
+  }
+
+  document.getElementById('analyzeBtn').addEventListener('click',initEngine);
+
 
   if(typeof Chess==='undefined'){
     feedbackEl.textContent='Chess library failed to load. Refresh the page while connected to the internet.';
