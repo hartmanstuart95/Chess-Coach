@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.3</title>
+<title>Chess Coach v0.3.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -43,7 +43,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.3</h1>
+<h1>Chess Coach v0.3.1</h1>
 <div class="sub">Reliable PGN import + interactive board + Stockfish analysis.</div>
 
 <div class="layout">
@@ -101,7 +101,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         <div class="engineLabel">Best line</div>
         <div id="pvValue">—</div>
       </div>
-      <div class="small" style="margin-top:8px">Stockfish 18 Lite • single-threaded • runs in your browser</div>
+      <div class="small" style="margin-top:8px">Stockfish 18 • iPad-compatible engine • runs in your browser</div>
     </div>
 
     <div class="card">
@@ -517,14 +517,12 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     document.getElementById('engineStatus').textContent='Loading Stockfish…';
 
     try{
-      const jsUrl='https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/stockfish-18-lite-single.js';
-      const wasmUrl='https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/stockfish-18-lite-single.wasm';
+      // iPad/Safari-safe build: ASM-JS has no WASM sidecar or cross-origin worker dependency.
+      const jsUrl='https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-asm.js';
 
-      const response=await fetch(jsUrl);
-      if(!response.ok)throw new Error('Could not download engine');
-      let source=await response.text();
-
-      source=source.replaceAll('stockfish-18-lite-single.wasm',wasmUrl);
+      const response=await fetch(jsUrl,{cache:'force-cache'});
+      if(!response.ok)throw new Error('Engine download failed: '+response.status);
+      const source=await response.text();
 
       const blob=new Blob([source],{type:'text/javascript'});
       const workerUrl=URL.createObjectURL(blob);
@@ -533,14 +531,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       engine.onmessage=e=>handleEngineLine(e.data);
       engine.onerror=e=>{
         engineLoading=false;
-        document.getElementById('engineStatus').textContent='Engine failed to start. Refresh and try again.';
+        document.getElementById('engineStatus').textContent='Stockfish started loading but Safari blocked the worker.';
         console.error(e);
       };
 
       engine.postMessage('uci');
     }catch(e){
       engineLoading=false;
-      document.getElementById('engineStatus').textContent='Could not load Stockfish. Check your internet connection.';
+      document.getElementById('engineStatus').textContent='Could not download Stockfish engine. Tap Analyze again or refresh.';
       console.error(e);
     }
   }
@@ -553,7 +551,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     engine.postMessage('stop');
     engine.postMessage('position fen '+game.fen());
-    engine.postMessage('go depth 16');
+    engine.postMessage('go depth 12');
   }
 
   document.getElementById('analyzeBtn').addEventListener('click',initEngine);
