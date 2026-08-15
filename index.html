@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.8.2</title>
+<title>Chess Coach v0.9</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -152,13 +152,21 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .profileGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
 .profileStat{background:#101218;border:1px solid #343a46;border-radius:10px;padding:9px}
 .profileNum{font-size:20px;font-weight:800}.profileName{font-size:11px;color:var(--muted)}
+.patternCard{background:#101218;border:1px solid #343a46;border-radius:12px;padding:12px;margin-top:10px}
+.patternHeadline{font-weight:800;font-size:18px;line-height:1.3}
+.patternSub{font-size:13px;color:var(--muted);margin-top:5px;line-height:1.45}
+.patternList{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.patternItem{background:#151820;border:1px solid #303641;border-radius:10px;padding:10px}
+.patternItem strong{display:block;margin-bottom:3px}
+.patternBar{height:7px;background:#242933;border-radius:999px;overflow:hidden;margin-top:7px}
+.patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.8.2</h1>
-<div class="sub">Middlegame coach + interactive move review.</div>
+<h1>Chess Coach v0.9</h1>
+<div class="sub">Pattern recognition + personalized chess learning.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -364,6 +372,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
           </div>
         </div>
         <div class="pauseBox">
+          <div class="reviewLabel">PATTERNS</div>
+          <div id="patternHeadline" class="patternHeadline">Analyze a game to detect recurring patterns.</div>
+          <div id="patternSub" class="patternSub">Chess Coach will compare this game with your prior reviewed games.</div>
+          <div id="currentGamePatterns" class="patternList"></div>
+          <div id="longTermPatterns" class="patternList"></div>
+        </div>
+
+        <div class="pauseBox">
           <div class="reviewLabel">LEARNING PROFILE</div>
           <div class="small">Stored locally on this iPad as you review games.</div>
           <div class="profileGrid">
@@ -441,6 +457,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let selectedPlan=null;
   let learningProfile={tactical:0,threats:0,king:0,planning:0,games:0};
   let reviewedGameKeys=[];
+  let patternMemory={games:0,tacticalGames:0,threatGames:0,kingGames:0,planningGames:0,mateMissGames:0,backRankGames:0};
   let reviewCategory='key';
 
   function switchTab(tabId){
@@ -545,16 +562,21 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       if(raw)learningProfile={...learningProfile,...JSON.parse(raw)};
       const keys=localStorage.getItem('chessCoachReviewedGames');
       if(keys)reviewedGameKeys=JSON.parse(keys);
+      const patterns=localStorage.getItem('chessCoachPatternMemory');
+      if(patterns)patternMemory={...patternMemory,...JSON.parse(patterns)};
     }catch(e){}
     renderLearningProfile();
+    renderPatternInsights();
   }
 
   function saveLearningProfile(){
     try{
       localStorage.setItem('chessCoachLearningProfile',JSON.stringify(learningProfile));
       localStorage.setItem('chessCoachReviewedGames',JSON.stringify(reviewedGameKeys));
+      localStorage.setItem('chessCoachPatternMemory',JSON.stringify(patternMemory));
     }catch(e){}
     renderLearningProfile();
+    renderPatternInsights();
   }
 
   function gameFingerprint(){
@@ -577,7 +599,85 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   function resetLearningProfile(){
     learningProfile={tactical:0,threats:0,king:0,planning:0,games:0};
     reviewedGameKeys=[];
+    patternMemory={games:0,tacticalGames:0,threatGames:0,kingGames:0,planningGames:0,mateMissGames:0,backRankGames:0};
     saveLearningProfile();
+  }
+
+  function detectCurrentGamePatterns(){
+    const rows=batchRows.filter(rowMatchesFocus);
+    const result={tactical:0,threats:0,king:0,planning:0,mateMisses:0,backRank:false};
+    rows.forEach(r=>{
+      if(r.rating.label==='Mate missed')result.mateMisses++;
+      if(r.rating.label==='Mate allowed')result.king++;
+      if(!['Inaccuracy','Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label))return;
+      const best=r.bestSan||'';
+      if(r.isMateEvent)result.king++;
+      else if(best.includes('x')||best.includes('+')||best.includes('#'))result.tactical++;
+      else if(r.loss>=200)result.threats++;
+      else result.planning++;
+    });
+    const mateRows=batchRows.filter(r=>r.rating.label==='Checkmate');
+    result.backRank=mateRows.some(r=>{
+      const s=r.actualSan||'';
+      return (s.startsWith('R')||s.startsWith('Q'))&&s.includes('#');
+    });
+    return result;
+  }
+
+  function patternItem(title,text,count,total){
+    const pct=total?Math.min(100,Math.round((count/total)*100)):0;
+    return '<div class="patternItem"><strong>'+title+'</strong><div class="patternSub">'+text+'</div>'+
+      (total?'<div class="patternBar"><div class="patternFill" style="width:'+pct+'%"></div></div>':'')+'</div>';
+  }
+
+  function renderPatternInsights(){
+    const head=document.getElementById('patternHeadline');
+    const sub=document.getElementById('patternSub');
+    const current=document.getElementById('currentGamePatterns');
+    const longTerm=document.getElementById('longTermPatterns');
+    if(!head||!sub||!current||!longTerm)return;
+    current.innerHTML=''; longTerm.innerHTML='';
+
+    if(batchRows.length){
+      const p=detectCurrentGamePatterns(), items=[];
+      if(p.mateMisses>=2)items.push(patternItem('Multiple missed mating opportunities',
+        'You missed '+p.mateMisses+' forced mating continuations in this game. When the enemy king is exposed, switch into forcing-move mode: Checks → Captures → Threats.',0,0));
+      if(p.tactical>=2)items.push(patternItem('Tactical opportunities missed',
+        p.tactical+' important moves involved a forcing capture/check that was stronger than your choice.',0,0));
+      if(p.threats>=2)items.push(patternItem('Opponent threats overlooked',
+        p.threats+' major evaluation swings came from failing to account for the opponent’s strongest reply.',0,0));
+      if(p.king>=2)items.push(patternItem('King safety is recurring inside this game',
+        'Several critical moments involved mate or king exposure. Make king safety part of your pre-move scan.',0,0));
+      if(p.planning>=3)items.push(patternItem('Middlegame planning needs attention',
+        p.planning+' errors were quieter positions where piece activity or planning mattered more than a direct tactic.',0,0));
+      if(p.backRank)items.push(patternItem('Back-rank mating pattern',
+        'This game ended with a rook/queen mating pattern. Add an escape-square check whenever your king is boxed behind its own pawns.',0,0));
+
+      if(items.length){
+        head.textContent='Patterns detected in this game';
+        sub.textContent='These themes tell you what kind of thinking to train, not just which move was wrong.';
+        current.innerHTML=items.join('');
+      }else{
+        head.textContent='No strong recurring pattern in this game';
+        sub.textContent='There were individual errors, but no single theme dominated at this review depth.';
+      }
+    }
+
+    const g=patternMemory.games||0;
+    if(g){
+      const c=[
+        ['Tactical misses',patternMemory.tacticalGames],
+        ['Opponent threats',patternMemory.threatGames],
+        ['King safety',patternMemory.kingGames],
+        ['Planning / piece activity',patternMemory.planningGames],
+        ['Missed mating sequences',patternMemory.mateMissGames],
+        ['Back-rank themes',patternMemory.backRankGames]
+      ].filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+      if(c.length){
+        longTerm.innerHTML='<div class="reviewLabel" style="margin-top:6px">ACROSS YOUR GAMES</div>'+
+          c.slice(0,4).map(x=>patternItem(x[0],'Seen in '+x[1]+' of '+g+' reviewed games.',x[1],g)).join('');
+      }
+    }
   }
 
   function renderLearningProfile(){
@@ -670,20 +770,13 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   function updateProfileFromRows(){
     const rows=batchRows.filter(rowMatchesFocus);
     if(!rows.length)return;
-
     const key=gameFingerprint();
-    if(reviewedGameKeys.includes(key)){
-      renderLearningProfile();
-      return;
-    }
+    if(reviewedGameKeys.includes(key)){renderLearningProfile();renderPatternInsights();return;}
 
     const counts={tactical:0,threats:0,king:0,planning:0};
     rows.forEach(r=>{
       if(!['Inaccuracy','Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label))return;
-      if(r.isMateEvent){
-        counts.king++;
-        return;
-      }
+      if(r.isMateEvent){counts.king++;return;}
       const best=r.bestSan||'';
       if(best.includes('x')||best.includes('+')||best.includes('#'))counts.tactical++;
       else if(r.loss>=200)counts.threats++;
@@ -692,6 +785,16 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     Object.keys(counts).forEach(k=>learningProfile[k]=(learningProfile[k]||0)+counts[k]);
     learningProfile.games=(learningProfile.games||0)+1;
+
+    const p=detectCurrentGamePatterns();
+    patternMemory.games=(patternMemory.games||0)+1;
+    if(p.tactical>0)patternMemory.tacticalGames++;
+    if(p.threats>0)patternMemory.threatGames++;
+    if(p.king>0)patternMemory.kingGames++;
+    if(p.planning>0)patternMemory.planningGames++;
+    if(p.mateMisses>0)patternMemory.mateMissGames++;
+    if(p.backRank)patternMemory.backRankGames++;
+
     reviewedGameKeys.push(key);
     if(reviewedGameKeys.length>100)reviewedGameKeys=reviewedGameKeys.slice(-100);
     saveLearningProfile();
@@ -1376,6 +1479,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     renderFocusedReview();
     updateProfileFromRows();
+    renderPatternInsights();
 
     document.getElementById('gameReviewStatus').textContent='Full game review complete • '+rows.length+' moves classified.';
     document.getElementById('analyzeGameBtn').disabled=false;
@@ -1793,6 +1897,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     document.querySelectorAll('.focusBtn').forEach(b=>b.classList.remove('activeFocus'));
     btn.classList.add('activeFocus');
     renderFocusedReview();
+    renderPatternInsights();
   }));
   document.getElementById('summaryBestBox').addEventListener('click',()=>renderReviewCategory('best'));
   document.getElementById('summaryGoodBox').addEventListener('click',()=>renderReviewCategory('good'));
