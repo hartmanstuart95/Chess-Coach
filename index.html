@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9</title>
+<title>Chess Coach v0.9.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -165,7 +165,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9</h1>
+<h1>Chess Coach v0.9.1</h1>
 <div class="sub">Pattern recognition + personalized chess learning.</div>
 
 <div class="layout">
@@ -250,7 +250,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         <div class="engineLabel">Best line</div>
         <div id="pvValue">—</div>
       </div>
-      <div class="small" style="margin-top:8px">Stockfish 18 • live analysis depth 12 • move review depth 10</div>
+      <div class="small" style="margin-top:8px">Stockfish 18 • Safari-safe local worker • live depth 12 • review depth 10</div>
     </div>
 
     </div>
@@ -1838,28 +1838,37 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     document.getElementById('engineStatus').textContent='Loading Stockfish…';
 
     try{
-      // iPad/Safari-safe build: ASM-JS has no WASM sidecar or cross-origin worker dependency.
-      const jsUrl='https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-asm.js';
+      // v0.9.1: same-origin worker bootstrap for Safari/iPad reliability.
+      // stockfish-worker.js lives beside index.html on GitHub Pages.
+      engine=new Worker('./stockfish-worker.js');
 
-      const response=await fetch(jsUrl,{cache:'force-cache'});
-      if(!response.ok)throw new Error('Engine download failed: '+response.status);
-      const source=await response.text();
+      let started=false;
+      const startupTimer=setTimeout(()=>{
+        if(!started){
+          try{engine.terminate();}catch(e){}
+          engine=null;
+          engineLoading=false;
+          document.getElementById('engineStatus').textContent='Stockfish worker timed out. Refresh once and try again.';
+        }
+      },15000);
 
-      const blob=new Blob([source],{type:'text/javascript'});
-      const workerUrl=URL.createObjectURL(blob);
-      engine=new Worker(workerUrl);
+      engine.onmessage=e=>{
+        started=true;
+        clearTimeout(startupTimer);
+        handleEngineLine(e.data);
+      };
 
-      engine.onmessage=e=>handleEngineLine(e.data);
       engine.onerror=e=>{
+        clearTimeout(startupTimer);
         engineLoading=false;
-        document.getElementById('engineStatus').textContent='Stockfish started loading but Safari blocked the worker.';
+        document.getElementById('engineStatus').textContent='Stockfish worker could not start. Make sure stockfish-worker.js was added to the repository.';
         console.error(e);
       };
 
       engine.postMessage('uci');
     }catch(e){
       engineLoading=false;
-      document.getElementById('engineStatus').textContent='Could not download Stockfish engine. Tap Analyze again or refresh.';
+      document.getElementById('engineStatus').textContent='Could not start the local Stockfish worker.';
       console.error(e);
     }
   }
