@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.7.2</title>
+<title>Chess Coach v0.8</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -137,13 +137,23 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .focusRow{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
 .focusBtn{padding:7px 10px;font-size:13px}.focusBtn.activeFocus{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
 .playerHeader{margin:8px 0 10px}.playerName{font-weight:800;font-size:18px}.playerSide{font-size:12px;color:var(--muted)}
+.thinkingGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.thinkCard{background:#101218;border:1px solid #343a46;border-radius:10px;padding:10px}
+.thinkLabel{font-size:11px;color:var(--muted);margin-bottom:4px}
+.thinkValue{font-weight:700;line-height:1.35}
+.pauseBox{background:#101218;border:1px solid #343a46;border-radius:12px;padding:12px;margin-top:10px}
+.choiceRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.choiceBtn{font-size:13px;padding:8px 10px}.choiceBtn.selectedChoice{background:#0ea5e9;border-color:#0ea5e9}
+.profileGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+.profileStat{background:#101218;border:1px solid #343a46;border-radius:10px;padding:9px}
+.profileNum{font-size:20px;font-weight:800}.profileName{font-size:11px;color:var(--muted)}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.7.2</h1>
-<div class="sub">Tabbed learning workspace + player-specific game review.</div>
+<h1>Chess Coach v0.8</h1>
+<div class="sub">Middlegame thinking system + personalized learning memory.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -174,6 +184,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <button class="tabBtn" data-tab="reviewTab">Review</button>
       <button class="tabBtn" data-tab="coachTab">Coach</button>
       <button class="tabBtn" data-tab="trainTab">Train</button>
+      <button class="tabBtn" data-tab="middleTab">Middlegame</button>
     </div>
     <div id="gameTab" class="tabPane activePane"><div class="card">
       <div class="badge">PGN</div>
@@ -312,6 +323,50 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     </div>
 
     </div>
+<div id="middleTab" class="tabPane">
+      <div class="card">
+        <div class="badge">MIDDLEGAME COACH</div>
+        <strong> What should I think about here?</strong>
+        <p class="small">Use this before revealing Stockfish. The goal is to generate a plan, not memorize an engine move.</p>
+        <button id="thinkBtn" class="primary">Think through this position</button>
+        <div class="thinkingGrid">
+          <div class="thinkCard"><div class="thinkLabel">1. Immediate danger</div><div id="thinkDanger" class="thinkValue">—</div></div>
+          <div class="thinkCard"><div class="thinkLabel">2. Forcing moves</div><div id="thinkForcing" class="thinkValue">—</div></div>
+          <div class="thinkCard"><div class="thinkLabel">3. King safety</div><div id="thinkKing" class="thinkValue">—</div></div>
+          <div class="thinkCard"><div class="thinkLabel">4. Worst piece</div><div id="thinkWorst" class="thinkValue">—</div></div>
+          <div class="thinkCard"><div class="thinkLabel">5. Target / weakness</div><div id="thinkTarget" class="thinkValue">—</div></div>
+          <div class="thinkCard"><div class="thinkLabel">6. Candidate plan</div><div id="thinkPlan" class="thinkValue">—</div></div>
+        </div>
+        <div class="pauseBox">
+          <div class="reviewLabel">PAUSE THE GAME</div>
+          <div id="pausePrompt" class="lessonTitle">Choose a middlegame position from your game.</div>
+          <div class="small">Before moving, decide what kind of move the position calls for.</div>
+          <div class="choiceRow">
+            <button class="choiceBtn" data-plan="threat">Answer a threat</button>
+            <button class="choiceBtn" data-plan="tactic">Look for a tactic</button>
+            <button class="choiceBtn" data-plan="piece">Improve a piece</button>
+            <button class="choiceBtn" data-plan="break">Create a pawn break</button>
+          </div>
+          <div id="pauseFeedback" class="small" style="margin-top:9px">Pick one, then try a move on the board.</div>
+          <div class="lessonActions">
+            <button id="pauseStartBtn" class="primary">Start pause position</button>
+            <button id="pauseRevealBtn">Reveal coach plan</button>
+          </div>
+        </div>
+        <div class="pauseBox">
+          <div class="reviewLabel">LEARNING PROFILE</div>
+          <div class="small">Stored locally on this iPad as you review games.</div>
+          <div class="profileGrid">
+            <div class="profileStat"><div id="profTactical" class="profileNum">0</div><div class="profileName">Tactical misses</div></div>
+            <div class="profileStat"><div id="profThreats" class="profileNum">0</div><div class="profileName">Threats overlooked</div></div>
+            <div class="profileStat"><div id="profKing" class="profileNum">0</div><div class="profileName">King safety</div></div>
+            <div class="profileStat"><div id="profPlanning" class="profileNum">0</div><div class="profileName">Planning / piece activity</div></div>
+          </div>
+          <div id="profileInsight" class="lessonPrompt small" style="margin-top:10px">Analyze games to build your learning profile.</div>
+        </div>
+      </div>
+    </div>
+
 <div class="card">
       <strong>Current position</strong>
       <div class="small">FEN</div>
@@ -365,6 +420,11 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let currentFocus='me';
   let pgnHeaders={};
   let mySide=null;
+  let pauseMode=false;
+  let pauseRow=null;
+  let pauseExpectedUci=null;
+  let selectedPlan=null;
+  let learningProfile={tactical:0,threats:0,king:0,planning:0};
 
   function switchTab(tabId){
     document.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('activePane'));
@@ -425,6 +485,106 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       btn.addEventListener('click',()=>{showBatchMove(r.i);switchTab('coachTab');});
       box.appendChild(btn);
     });
+  }
+
+  function loadLearningProfile(){
+    try{
+      const raw=localStorage.getItem('chessCoachLearningProfile');
+      if(raw)learningProfile={...learningProfile,...JSON.parse(raw)};
+    }catch(e){}
+    renderLearningProfile();
+  }
+
+  function saveLearningProfile(){
+    try{localStorage.setItem('chessCoachLearningProfile',JSON.stringify(learningProfile));}catch(e){}
+    renderLearningProfile();
+  }
+
+  function renderLearningProfile(){
+    const map={tactical:'profTactical',threats:'profThreats',king:'profKing',planning:'profPlanning'};
+    Object.keys(map).forEach(k=>{const el=document.getElementById(map[k]);if(el)el.textContent=learningProfile[k]||0;});
+    const insight=document.getElementById('profileInsight'); if(!insight)return;
+    const top=Object.entries(learningProfile).sort((a,b)=>b[1]-a[1])[0];
+    if(!top||top[1]===0){insight.textContent='Analyze games to build your learning profile.';return;}
+    const names={tactical:'tactical opportunities',threats:'opponent threats',king:'king safety',planning:'middlegame planning / piece activity'};
+    insight.textContent='Current priority: '+names[top[0]]+'. This is the most common theme in your reviewed mistakes so far.';
+  }
+
+  function findWorstPiece(g,color){
+    const board=g.board(), list=[];
+    for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+      const p=board[r][f]; if(!p||p.color!==color||p.type==='p'||p.type==='k')continue;
+      const sq='abcdefgh'[f]+(8-r);
+      let moves=0; try{moves=g.moves({square:sq,verbose:true}).length;}catch(e){}
+      list.push({sq,p,moves});
+    }
+    if(!list.length)return 'No obvious piece';
+    list.sort((a,b)=>a.moves-b.moves);
+    const names={n:'knight',b:'bishop',r:'rook',q:'queen'};
+    return (color==='w'?'White ':'Black ')+(names[list[0].p.type]||'piece')+' on '+list[0].sq;
+  }
+
+  function analyzeThinkingPosition(){
+    const g=new Chess(game.fen()), side=g.turn();
+    const all=g.moves({verbose:true}), checks=[], captures=[];
+    all.forEach(m=>{
+      const c=new Chess(g.fen()); const played=c.move(m); if(!played)return;
+      if(c.in_check())checks.push(m.san);
+      if(m.captured)captures.push(m.san);
+    });
+    document.getElementById('thinkDanger').textContent=g.in_check()?'You are in check — respond first.':'No immediate check. Scan opponent checks, captures, threats.';
+    document.getElementById('thinkForcing').textContent=checks.length?'Checks: '+checks.slice(0,3).join(', '):captures.length?'Captures: '+captures.slice(0,3).join(', '):'No obvious forcing move. Shift to positional thinking.';
+    document.getElementById('thinkKing').textContent=g.in_check()?'King safety is urgent.':'King is not currently in check; still verify open files and diagonals.';
+    const worst=findWorstPiece(g,side);
+    document.getElementById('thinkWorst').textContent=worst;
+    document.getElementById('thinkTarget').textContent='Look for loose pieces, backward pawns, weak squares, or an exposed king.';
+    document.getElementById('thinkPlan').textContent=g.in_check()?'Answer the threat safely.':checks.length?'Calculate checks first.':captures.length?'Calculate captures first.':'Improve '+worst.replace(/^White |^Black /,'')+' or prepare a pawn break.';
+  }
+
+  function choosePauseRow(){
+    const rows=batchRows.filter(rowMatchesFocus);
+    if(!rows.length)return null;
+    const c=rows.filter(r=>r.moveNo>=8&&!r.isMateEvent);
+    c.sort((a,b)=>{
+      const w=x=>x.rating.label==='Blunder'?5:x.rating.label==='Mistake'?4:x.rating.label==='Inaccuracy'?3:x.rating.label==='Good'?2:1;
+      return w(b)-w(a)||b.loss-a.loss;
+    });
+    return c[0]||rows[0];
+  }
+
+  function startPausePosition(){
+    const r=choosePauseRow();
+    if(!r){document.getElementById('pauseFeedback').textContent='Run Full Game Review first.';return;}
+    pauseRow=r; pauseMode=true; pauseExpectedUci=r.bestUci; selectedPlan=null;
+    document.querySelectorAll('.choiceBtn').forEach(b=>b.classList.remove('selectedChoice'));
+    jumpToMove(r.i); bestMoveHighlight=null; clearEngineDisplay();
+    document.getElementById('pausePrompt').textContent='Move '+r.moveNo+(r.side==='White'?'.':'…')+' — '+r.side+' to move. What is the plan?';
+    document.getElementById('pauseFeedback').textContent='Choose the type of move first, then play a candidate on the board.';
+    switchTab('middleTab'); render();
+  }
+
+  function revealPausePlan(){
+    const r=pauseRow||choosePauseRow();
+    if(!r){document.getElementById('pauseFeedback').textContent='Run Full Game Review first.';return;}
+    pauseRow=r; const lesson=lessonForRow(r);
+    document.getElementById('pauseFeedback').textContent='Coach plan: '+lesson.think+' Best move: '+r.bestSan+'.';
+    bestMoveHighlight=r.bestUci&&r.bestUci!=='(none)'?{from:r.bestUci.slice(0,2),to:r.bestUci.slice(2,4)}:null;
+    pauseMode=false; render();
+  }
+
+  function updateProfileFromRows(){
+    const rows=batchRows.filter(rowMatchesFocus); if(!rows.length)return;
+    const counts={tactical:0,threats:0,king:0,planning:0};
+    rows.forEach(r=>{
+      if(!['Inaccuracy','Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label))return;
+      if(r.isMateEvent){counts.king++;return;}
+      const best=r.bestSan||'';
+      if(best.includes('x')||best.includes('+')||best.includes('#'))counts.tactical++;
+      else if(r.loss>=200)counts.threats++;
+      else counts.planning++;
+    });
+    Object.keys(counts).forEach(k=>learningProfile[k]+=counts[k]);
+    saveLearningProfile();
   }
 
   function squareNames(){
@@ -547,6 +707,24 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     lastMove={from:move.from,to:move.to};
     selected=null;
     legalTargets=[];
+
+    if(pauseMode){
+      const playedUci=move.from+move.to+(move.promotion||'');
+      const r=pauseRow;
+      const correct=playedUci===pauseExpectedUci;
+      pauseMode=false;
+      if(correct){
+        document.getElementById('pauseFeedback').textContent='✓ Strong move: '+move.san+'. Now explain why it fits the plan before revealing the engine line.';
+      }else{
+        document.getElementById('pauseFeedback').textContent='You chose '+move.san+'. Compare that move with your selected plan, then try again or reveal the coach plan.';
+      }
+      jumpToMove(r.i);
+      if(correct&&r){
+        bestMoveHighlight={from:r.bestUci.slice(0,2),to:r.bestUci.slice(2,4)};
+        render();
+      }
+      return;
+    }
 
     if(puzzleMode){
       const playedUci=move.from+move.to+(move.promotion||'');
@@ -1081,6 +1259,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     batchRows=rows;
 
     renderFocusedReview();
+    updateProfileFromRows();
 
     document.getElementById('gameReviewStatus').textContent='Full game review complete • '+rows.length+' moves classified.';
     document.getElementById('analyzeGameBtn').disabled=false;
@@ -1499,6 +1678,23 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     btn.classList.add('activeFocus');
     renderFocusedReview();
   }));
+
+  document.getElementById('thinkBtn').addEventListener('click',analyzeThinkingPosition);
+  document.getElementById('pauseStartBtn').addEventListener('click',startPausePosition);
+  document.getElementById('pauseRevealBtn').addEventListener('click',revealPausePlan);
+
+  document.querySelectorAll('.choiceBtn').forEach(btn=>btn.addEventListener('click',()=>{
+    selectedPlan=btn.dataset.plan;
+    document.querySelectorAll('.choiceBtn').forEach(b=>b.classList.remove('selectedChoice'));
+    btn.classList.add('selectedChoice');
+    const text={
+      threat:'Good. First prove the opponent has a real threat and identify the forcing reply you must answer.',
+      tactic:'Good. Calculate checks, captures, and forcing threats before quieter moves.',
+      piece:'Good. Identify your least-active piece and improve it toward a useful square.',
+      break:'Good. Identify which pawn break changes the structure and whether your pieces support it.'
+    };
+    document.getElementById('pauseFeedback').textContent=text[selectedPlan];
+  }));
   document.getElementById('autoAnalyze').addEventListener('change',e=>{
     if(e.target.checked)scheduleAutoAnalysis();
     else{
@@ -1508,6 +1704,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     }
   });
 
+
+  loadLearningProfile();
 
   if(typeof Chess==='undefined'){
     feedbackEl.textContent='Chess library failed to load. Refresh the page while connected to the internet.';
