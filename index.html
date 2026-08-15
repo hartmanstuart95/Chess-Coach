@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.8</title>
+<title>Chess Coach v0.8.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -152,8 +152,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.8</h1>
-<div class="sub">Middlegame thinking system + personalized learning memory.</div>
+<h1>Chess Coach v0.8.1</h1>
+<div class="sub">Middlegame thinking system + smarter learning memory.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -363,6 +363,11 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
             <div class="profileStat"><div id="profPlanning" class="profileNum">0</div><div class="profileName">Planning / piece activity</div></div>
           </div>
           <div id="profileInsight" class="lessonPrompt small" style="margin-top:10px">Analyze games to build your learning profile.</div>
+          <div class="lessonActions" style="margin-top:10px">
+            <button id="profileDetailsBtn">Profile details</button>
+            <button id="resetProfileBtn">Reset memory</button>
+          </div>
+          <div id="profileDetails" class="small" style="margin-top:10px;display:none"></div>
         </div>
       </div>
     </div>
@@ -424,7 +429,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let pauseRow=null;
   let pauseExpectedUci=null;
   let selectedPlan=null;
-  let learningProfile={tactical:0,threats:0,king:0,planning:0};
+  let learningProfile={tactical:0,threats:0,king:0,planning:0,games:0};
+  let reviewedGameKeys=[];
 
   function switchTab(tabId){
     document.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('activePane'));
@@ -491,23 +497,66 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     try{
       const raw=localStorage.getItem('chessCoachLearningProfile');
       if(raw)learningProfile={...learningProfile,...JSON.parse(raw)};
+      const keys=localStorage.getItem('chessCoachReviewedGames');
+      if(keys)reviewedGameKeys=JSON.parse(keys);
     }catch(e){}
     renderLearningProfile();
   }
 
   function saveLearningProfile(){
-    try{localStorage.setItem('chessCoachLearningProfile',JSON.stringify(learningProfile));}catch(e){}
+    try{
+      localStorage.setItem('chessCoachLearningProfile',JSON.stringify(learningProfile));
+      localStorage.setItem('chessCoachReviewedGames',JSON.stringify(reviewedGameKeys));
+    }catch(e){}
     renderLearningProfile();
+  }
+
+  function gameFingerprint(){
+    const parts=[
+      pgnHeaders.White||'',
+      pgnHeaders.Black||'',
+      pgnHeaders.Date||'',
+      pgnHeaders.Result||'',
+      loadedMoves.join(' ')
+    ];
+    const str=parts.join('|');
+    let hash=2166136261;
+    for(let i=0;i<str.length;i++){
+      hash^=str.charCodeAt(i);
+      hash=Math.imul(hash,16777619);
+    }
+    return (hash>>>0).toString(16);
+  }
+
+  function resetLearningProfile(){
+    learningProfile={tactical:0,threats:0,king:0,planning:0,games:0};
+    reviewedGameKeys=[];
+    saveLearningProfile();
   }
 
   function renderLearningProfile(){
     const map={tactical:'profTactical',threats:'profThreats',king:'profKing',planning:'profPlanning'};
     Object.keys(map).forEach(k=>{const el=document.getElementById(map[k]);if(el)el.textContent=learningProfile[k]||0;});
     const insight=document.getElementById('profileInsight'); if(!insight)return;
-    const top=Object.entries(learningProfile).sort((a,b)=>b[1]-a[1])[0];
-    if(!top||top[1]===0){insight.textContent='Analyze games to build your learning profile.';return;}
-    const names={tactical:'tactical opportunities',threats:'opponent threats',king:'king safety',planning:'middlegame planning / piece activity'};
-    insight.textContent='Current priority: '+names[top[0]]+'. This is the most common theme in your reviewed mistakes so far.';
+    const themes=['tactical','threats','king','planning'];
+    const top=themes.map(k=>[k,learningProfile[k]||0]).sort((a,b)=>b[1]-a[1])[0];
+    const games=learningProfile.games||0;
+    if(!top||top[1]===0){
+      insight.textContent='Analyze games to build your learning profile.';
+    }else{
+      const names={tactical:'tactical opportunities',threats:'opponent threats',king:'king safety',planning:'middlegame planning / piece activity'};
+      insight.textContent='Current priority: '+names[top[0]]+'. Based on '+games+' unique reviewed game'+(games===1?'':'s')+'.';
+    }
+
+    const details=document.getElementById('profileDetails');
+    if(details){
+      details.innerHTML=
+        '<strong>Unique games reviewed:</strong> '+games+'<br>'+
+        '<strong>Tactical misses:</strong> '+(learningProfile.tactical||0)+'<br>'+
+        '<strong>Threats overlooked:</strong> '+(learningProfile.threats||0)+'<br>'+
+        '<strong>King-safety errors:</strong> '+(learningProfile.king||0)+'<br>'+
+        '<strong>Planning / activity errors:</strong> '+(learningProfile.planning||0);
+    }
   }
 
   function findWorstPiece(g,color){
@@ -573,17 +622,32 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   }
 
   function updateProfileFromRows(){
-    const rows=batchRows.filter(rowMatchesFocus); if(!rows.length)return;
+    const rows=batchRows.filter(rowMatchesFocus);
+    if(!rows.length)return;
+
+    const key=gameFingerprint();
+    if(reviewedGameKeys.includes(key)){
+      renderLearningProfile();
+      return;
+    }
+
     const counts={tactical:0,threats:0,king:0,planning:0};
     rows.forEach(r=>{
       if(!['Inaccuracy','Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label))return;
-      if(r.isMateEvent){counts.king++;return;}
+      if(r.isMateEvent){
+        counts.king++;
+        return;
+      }
       const best=r.bestSan||'';
       if(best.includes('x')||best.includes('+')||best.includes('#'))counts.tactical++;
       else if(r.loss>=200)counts.threats++;
       else counts.planning++;
     });
-    Object.keys(counts).forEach(k=>learningProfile[k]+=counts[k]);
+
+    Object.keys(counts).forEach(k=>learningProfile[k]=(learningProfile[k]||0)+counts[k]);
+    learningProfile.games=(learningProfile.games||0)+1;
+    reviewedGameKeys.push(key);
+    if(reviewedGameKeys.length>100)reviewedGameKeys=reviewedGameKeys.slice(-100);
     saveLearningProfile();
   }
 
@@ -1682,6 +1746,17 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   document.getElementById('thinkBtn').addEventListener('click',analyzeThinkingPosition);
   document.getElementById('pauseStartBtn').addEventListener('click',startPausePosition);
   document.getElementById('pauseRevealBtn').addEventListener('click',revealPausePlan);
+
+  document.getElementById('profileDetailsBtn').addEventListener('click',()=>{
+    const el=document.getElementById('profileDetails');
+    el.style.display=el.style.display==='none'?'block':'none';
+  });
+
+  document.getElementById('resetProfileBtn').addEventListener('click',()=>{
+    if(confirm('Reset Chess Coach learning memory on this device?')){
+      resetLearningProfile();
+    }
+  });
 
   document.querySelectorAll('.choiceBtn').forEach(btn=>btn.addEventListener('click',()=>{
     selectedPlan=btn.dataset.plan;
