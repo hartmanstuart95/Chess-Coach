@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.8.1</title>
+<title>Chess Coach v0.8.2</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -122,6 +122,11 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .progressFill{height:100%;width:0%;background:#0ea5e9;transition:width .2s ease}
 .summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .summaryBox{background:#101218;border:1px solid #343a46;border-radius:10px;padding:9px;text-align:center}
+.summaryBox.clickable{cursor:pointer;transition:.15s}.summaryBox.clickable:hover{background:#171b22}
+.summaryBox.activeSummary{border-color:#0ea5e9;box-shadow:inset 0 0 0 1px #0ea5e9}
+.reviewMovesList{margin-top:12px;display:flex;flex-direction:column;gap:7px;max-height:420px;overflow:auto;padding-right:3px}
+.reviewMoveRow{display:grid;grid-template-columns:58px 1fr auto;gap:9px;align-items:center;width:100%;text-align:left;padding:9px 10px;background:#101218;border:1px solid #343a46;border-radius:10px}
+.reviewMoveRow:hover{background:#171b22}.reviewMoveName{font-weight:800}.reviewMoveMeta{font-size:12px;color:var(--muted)}
 .summaryNum{font-size:20px;font-weight:800}.summaryName{font-size:11px;color:var(--muted);margin-top:2px}
 .keyMoves{margin-top:12px;display:flex;flex-direction:column;gap:7px}
 .keyMove{display:grid;grid-template-columns:56px 1fr auto;gap:9px;align-items:center;width:100%;text-align:left;padding:9px 10px;background:#101218;border:1px solid #343a46;border-radius:10px}
@@ -152,8 +157,8 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.8.1</h1>
-<div class="sub">Middlegame thinking system + smarter learning memory.</div>
+<h1>Chess Coach v0.8.2</h1>
+<div class="sub">Middlegame coach + interactive move review.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -257,12 +262,17 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         </div>
         <div class="playerHeader"><div id="focusPlayerName" class="playerName">Focus on Me</div><div id="focusPlayerSide" class="playerSide">Load a PGN to identify your side.</div></div>
         <div class="summaryGrid">
-        <div class="summaryBox"><div id="sumBest" class="summaryNum">—</div><div class="summaryName">Best / Excellent</div></div>
-        <div class="summaryBox"><div id="sumGood" class="summaryNum">—</div><div class="summaryName">Good / Inaccuracy</div></div>
-        <div class="summaryBox"><div id="sumBad" class="summaryNum">—</div><div class="summaryName">Mistakes / Blunders</div></div>
+        <div id="summaryBestBox" class="summaryBox clickable"><div id="sumBest" class="summaryNum">—</div><div class="summaryName">Best / Excellent</div></div>
+        <div id="summaryGoodBox" class="summaryBox clickable"><div id="sumGood" class="summaryNum">—</div><div class="summaryName">Good / Inaccuracy</div></div>
+        <div id="summaryBadBox" class="summaryBox clickable"><div id="sumBad" class="summaryNum">—</div><div class="summaryName">Mistakes / Blunders</div></div>
       </div>
 
-      <div style="margin-top:14px;font-weight:700">Key learning positions</div>
+      <div style="margin-top:14px;display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <div id="reviewListTitle" style="font-weight:700">Key learning positions</div>
+        <button id="showKeyBtn" style="padding:5px 8px;font-size:12px">Key positions</button>
+      </div>
+      <div id="allReviewMoves" class="reviewMovesList" style="display:none"></div>
+      <div id="keyMovesTitle" style="margin-top:10px;font-weight:700">Key learning positions</div>
       <div id="keyMoves" class="keyMoves">
         <div class="small">Your biggest evaluation swings will appear here.</div>
       </div>
@@ -431,6 +441,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   let selectedPlan=null;
   let learningProfile={tactical:0,threats:0,king:0,planning:0,games:0};
   let reviewedGameKeys=[];
+  let reviewCategory='key';
 
   function switchTab(tabId){
     document.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('activePane'));
@@ -471,6 +482,41 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     if(mySide==='white'){n.textContent=pgnHeaders.White||'Me';s.textContent='Me • White'+(pgnHeaders.WhiteElo?' • '+pgnHeaders.WhiteElo:'');}
     else if(mySide==='black'){n.textContent=pgnHeaders.Black||'Me';s.textContent='Me • Black'+(pgnHeaders.BlackElo?' • '+pgnHeaders.BlackElo:'');}
     else {n.textContent='Focus on Me';s.textContent='Could not identify your username — showing both players.';}
+  }
+
+  function categoryRows(rows,category){
+    if(category==='best')return rows.filter(r=>['Best','Excellent','Checkmate','Mate found'].includes(r.rating.label));
+    if(category==='good')return rows.filter(r=>['Good','Inaccuracy'].includes(r.rating.label));
+    if(category==='bad')return rows.filter(r=>['Mistake','Blunder','Mate missed','Mate allowed'].includes(r.rating.label));
+    return [];
+  }
+
+  function renderReviewCategory(category){
+    reviewCategory=category;
+    document.querySelectorAll('.summaryBox.clickable').forEach(b=>b.classList.remove('activeSummary'));
+    const list=document.getElementById('allReviewMoves'), key=document.getElementById('keyMoves'), keyTitle=document.getElementById('keyMovesTitle'), title=document.getElementById('reviewListTitle');
+
+    if(category==='key'){
+      list.style.display='none'; key.style.display='flex'; keyTitle.style.display='block'; title.textContent='Key learning positions'; return;
+    }
+
+    const id=category==='best'?'summaryBestBox':category==='good'?'summaryGoodBox':'summaryBadBox';
+    document.getElementById(id)?.classList.add('activeSummary');
+    const rows=categoryRows(batchRows.filter(rowMatchesFocus),category);
+    key.style.display='none'; keyTitle.style.display='none'; list.style.display='flex';
+    const names={best:'Best / Excellent moves',good:'Good / Inaccuracy moves',bad:'Mistakes / Blunders'};
+    title.textContent=names[category]+' — tap any move to inspect it';
+    list.innerHTML='';
+    if(!rows.length){list.innerHTML='<div class="small">No moves in this category for the selected player.</div>';return;}
+    rows.forEach(r=>{
+      const btn=document.createElement('button'); btn.type='button'; btn.className='reviewMoveRow';
+      const loss=r.isMateEvent?'Mate':(r.loss>0?'-'+(r.loss/100).toFixed(2):'0.00');
+      btn.innerHTML='<div class="reviewMoveName">'+r.moveNo+(r.side==='White'?'.':'…')+' '+r.actualSan+'</div>'+
+      '<div><div class="'+r.rating.cls+'" style="font-weight:700">'+r.rating.label+'</div><div class="reviewMoveMeta">'+r.side+' • Best: '+r.bestSan+'</div></div>'+
+      '<div style="font-weight:800">'+loss+'</div>';
+      btn.addEventListener('click',()=>{showBatchMove(r.i);switchTab('coachTab');});
+      list.appendChild(btn);
+    });
   }
 
   function renderFocusedReview(){
@@ -1313,14 +1359,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         bestSan,
         loss,
         rating,
-        isMateEvent:!!mateRating,
-        mateNote:mateRating?.mateNote||null,
+        isMateEvent:!!(mateRating && ['Checkmate','Mate found','Mate missed','Mate allowed'].includes(mateRating.label)),
+        mateNote:(mateRating && ['Checkmate','Mate found','Mate missed','Mate allowed'].includes(mateRating.label)) ? (mateRating.mateNote||null) : null,
         before,
         after
       });
     }
 
     batchRows=rows;
+    reviewCategory='key';
+    document.querySelectorAll('.summaryBox.clickable').forEach(b=>b.classList.remove('activeSummary'));
+    document.getElementById('allReviewMoves').style.display='none';
+    document.getElementById('keyMoves').style.display='flex';
+    document.getElementById('keyMovesTitle').style.display='block';
+    document.getElementById('reviewListTitle').textContent='Key learning positions';
 
     renderFocusedReview();
     updateProfileFromRows();
@@ -1742,6 +1794,10 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     btn.classList.add('activeFocus');
     renderFocusedReview();
   }));
+  document.getElementById('summaryBestBox').addEventListener('click',()=>renderReviewCategory('best'));
+  document.getElementById('summaryGoodBox').addEventListener('click',()=>renderReviewCategory('good'));
+  document.getElementById('summaryBadBox').addEventListener('click',()=>renderReviewCategory('bad'));
+  document.getElementById('showKeyBtn').addEventListener('click',()=>renderReviewCategory('key'));
 
   document.getElementById('thinkBtn').addEventListener('click',analyzeThinkingPosition);
   document.getElementById('pauseStartBtn').addEventListener('click',startPausePosition);
