@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2A</title>
+<title>Chess Coach v0.9.2A.2</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2A board visual system === */
+/* === Chess Coach v0.9.2A.2 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -273,26 +273,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 }
 
 
-.sq:has(.piece)::before{
-  content:"";
-  position:absolute;
-  z-index:1;
-  width:54%;
-  height:12%;
-  left:23%;
-  bottom:9%;
-  border-radius:50%;
-  background:rgba(0,0,0,.13);
-  filter:blur(3px);
-  pointer-events:none;
-}
+
 
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2A</h1>
-<div class="sub">Pattern recognition + true solid-piece board design.</div>
+<h1>Chess Coach v0.9.2A.2</h1>
+<div class="sub">Pattern recognition + Safari-safe SVG chess piece set.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -536,10 +524,77 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script>
 (function(){
-  const U={
-    wK:'♚',wQ:'♛',wR:'♜',wB:'♝',wN:'♞',wP:'♟',
-    bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'
-  };
+  function pieceSVGData(type,color){
+    const isWhite=color==='w';
+    const fill=isWhite?'#f7f7f2':'#151920';
+    const stroke=isWhite?'#3c4046':'#050607';
+    const detail=isWhite?'#d8d9d4':'#343a43';
+    const accent=isWhite?'#52d96d':'#7cff50';
+
+    const start='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">';
+    const end='</svg>';
+    const body=(d)=>'<path d="'+d+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
+    const det=(d)=>'<path d="'+d+'" fill="'+detail+'" stroke="'+stroke+'" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>';
+    const line=(d)=>'<path d="'+d+'" fill="none" stroke="'+stroke+'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+    const acc=(d)=>'<path d="'+d+'" fill="none" stroke="'+accent+'" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>';
+
+    const svg={
+      p:start+
+        '<circle cx="50" cy="24" r="12" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2.2"/>'+
+        body('M40 37h20l5 10-6 24H41l-6-24z')+
+        body('M34 72h32l6 10H28z')+
+        body('M25 83h50v9H25z')+
+        acc('M38 56c8-4 16-9 24-16')+end,
+
+      n:start+
+        body('M31 81h44v10H25l6-10z')+
+        body('M38 74h31l5 7H31z')+
+        body('M39 73c-3-12-1-25 7-35l-8-3 10-16 12 6 11 12c6 8 8 19 4 28-3 6-8 9-14 9z')+
+        det('M46 30l8-8 7 5-5 8z')+
+        '<circle cx="61" cy="37" r="2.2" fill="'+stroke+'"/>'+
+        line('M45 52c6-2 12-1 18 3')+
+        acc('M43 64c8-4 15-9 22-16')+end,
+
+      b:start+
+        '<circle cx="50" cy="18" r="8" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2.2"/>'+
+        body('M43 28h14l7 15-5 24H41l-5-24z')+
+        line('M55 10l-9 15')+
+        body('M36 68h28l7 9H29z')+
+        body('M24 79h52v12H24z')+
+        acc('M39 54c8-4 15-10 22-17')+end,
+
+      r:start+
+        body('M28 16h9v8h8v-8h10v8h8v-8h9v18H28z')+
+        body('M34 34h32l-4 37H38z')+
+        det('M38 42h24l-1 8H39z')+
+        body('M31 71h38l6 9H25z')+
+        body('M22 81h56v11H22z')+
+        acc('M38 58c8-3 16-8 24-14')+end,
+
+      q:start+
+        '<circle cx="27" cy="18" r="5" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>'+
+        '<circle cx="42" cy="13" r="5" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>'+
+        '<circle cx="58" cy="13" r="5" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>'+
+        '<circle cx="73" cy="18" r="5" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>'+
+        body('M28 24l10 24 12-29 12 29 10-24-7 45H35z')+
+        det('M37 57h26l-1 10H38z')+
+        body('M31 69h38l6 10H25z')+
+        body('M22 81h56v11H22z')+
+        acc('M36 50c10-3 19-8 28-16')+end,
+
+      k:start+
+        line('M50 8v16M42 16h16')+
+        '<circle cx="50" cy="30" r="10" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2.2"/>'+
+        body('M39 41h22l7 28H32z')+
+        det('M37 54h26l2 9H35z')+
+        body('M29 69h42l6 10H23z')+
+        body('M20 81h60v11H20z')+
+        acc('M37 58c9-4 18-9 27-17')+end
+    }[type];
+
+    return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+  }
+
   const files='abcdefgh';
 
   const boardEl=document.getElementById('board');
@@ -968,8 +1023,12 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       }
       if(p){
         const span=document.createElement('span');
-        span.className='piece '+(p.color==='w'?'whitePiece':'blackPiece');
-        span.textContent=U[p.color+p.type.toUpperCase()];
+        span.className='piece';
+        const img=document.createElement('img');
+        img.alt='';
+        img.draggable=false;
+        img.src=pieceSVGData(p.type,p.color);
+        span.appendChild(img);
         div.appendChild(span);
       }else if(legalTargets.includes(sq)){
         const dot=document.createElement('span');
