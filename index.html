@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2A</title>
+<title>Chess Coach v0.9.2A.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2A board visual system === */
+/* === Chess Coach v0.9.2A.1 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -273,26 +273,14 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 }
 
 
-.sq:has(.piece)::before{
-  content:"";
-  position:absolute;
-  z-index:1;
-  width:54%;
-  height:12%;
-  left:23%;
-  bottom:9%;
-  border-radius:50%;
-  background:rgba(0,0,0,.13);
-  filter:blur(3px);
-  pointer-events:none;
-}
+
 
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2A</h1>
-<div class="sub">Pattern recognition + true solid-piece board design.</div>
+<h1>Chess Coach v0.9.2A.1</h1>
+<div class="sub">Pattern recognition + custom SVG chess piece set.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -536,10 +524,71 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script>
 (function(){
-  const U={
-    wK:'♚',wQ:'♛',wR:'♜',wB:'♝',wN:'♞',wP:'♟',
-    bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'
-  };
+  function pieceSVG(type){
+    const commonStart='<svg viewBox="0 0 100 100" aria-hidden="true">';
+    const end='</svg>';
+
+    const svg={
+      p: commonStart+
+        '<circle class="body" cx="50" cy="24" r="12"/>'+
+        '<path class="body" d="M40 37h20l5 10-6 24H41l-6-24z"/>'+
+        '<path class="body" d="M34 72h32l6 10H28z"/>'+
+        '<path class="body" d="M25 83h50v9H25z"/>'+
+        '<path class="accent" d="M38 56c8-4 16-9 24-16"/>'+
+        end,
+
+      n: commonStart+
+        '<path class="body" d="M31 81h44v10H25l6-10z"/>'+
+        '<path class="body" d="M38 74h31l5 7H31z"/>'+
+        '<path class="body" d="M39 73c-3-12-1-25 7-35l-8-3 10-16 12 6 11 12c6 8 8 19 4 28-3 6-8 9-14 9z"/>'+
+        '<path class="detail" d="M46 30l8-8 7 5-5 8z"/>'+
+        '<circle cx="61" cy="37" r="2.2" fill="var(--piece-stroke)"/>'+
+        '<path class="line" d="M45 52c6-2 12-1 18 3"/>'+
+        '<path class="accent" d="M43 64c8-4 15-9 22-16"/>'+
+        end,
+
+      b: commonStart+
+        '<circle class="body" cx="50" cy="18" r="8"/>'+
+        '<path class="body" d="M43 28h14l7 15-5 24H41l-5-24z"/>'+
+        '<path class="line" d="M55 10l-9 15"/>'+
+        '<path class="body" d="M36 68h28l7 9H29z"/>'+
+        '<path class="body" d="M24 79h52v12H24z"/>'+
+        '<path class="accent" d="M39 54c8-4 15-10 22-17"/>'+
+        end,
+
+      r: commonStart+
+        '<path class="body" d="M28 16h9v8h8v-8h10v8h8v-8h9v18H28z"/>'+
+        '<path class="body" d="M34 34h32l-4 37H38z"/>'+
+        '<path class="detail" d="M38 42h24l-1 8H39z"/>'+
+        '<path class="body" d="M31 71h38l6 9H25z"/>'+
+        '<path class="body" d="M22 81h56v11H22z"/>'+
+        '<path class="accent" d="M38 58c8-3 16-8 24-14"/>'+
+        end,
+
+      q: commonStart+
+        '<circle class="body" cx="27" cy="18" r="5"/>'+
+        '<circle class="body" cx="42" cy="13" r="5"/>'+
+        '<circle class="body" cx="58" cy="13" r="5"/>'+
+        '<circle class="body" cx="73" cy="18" r="5"/>'+
+        '<path class="body" d="M28 24l10 24 12-29 12 29 10-24-7 45H35z"/>'+
+        '<path class="detail" d="M37 57h26l-1 10H38z"/>'+
+        '<path class="body" d="M31 69h38l6 10H25z"/>'+
+        '<path class="body" d="M22 81h56v11H22z"/>'+
+        '<path class="accent" d="M36 50c10-3 19-8 28-16"/>'+
+        end,
+
+      k: commonStart+
+        '<path class="line" d="M50 8v16M42 16h16"/>'+
+        '<circle class="body" cx="50" cy="30" r="10"/>'+
+        '<path class="body" d="M39 41h22l7 28H32z"/>'+
+        '<path class="detail" d="M37 54h26l2 9H35z"/>'+
+        '<path class="body" d="M29 69h42l6 10H23z"/>'+
+        '<path class="body" d="M20 81h60v11H20z"/>'+
+        '<path class="accent" d="M37 58c9-4 18-9 27-17"/>'+
+        end
+    };
+    return svg[type];
+  }
   const files='abcdefgh';
 
   const boardEl=document.getElementById('board');
@@ -969,7 +1018,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       if(p){
         const span=document.createElement('span');
         span.className='piece '+(p.color==='w'?'whitePiece':'blackPiece');
-        span.textContent=U[p.color+p.type.toUpperCase()];
+        span.innerHTML=pieceSVG(p.type);
         div.appendChild(span);
       }else if(legalTargets.includes(sq)){
         const dot=document.createElement('span');
