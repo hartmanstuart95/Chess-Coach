@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2B.7</title>
+<title>Chess Coach v0.9.2B.8</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2B.7 board visual system === */
+/* === Chess Coach v0.9.2B.8 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -362,12 +362,66 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 #reloadLatestBtn:active{
   transform:translateY(1px);
 }
+
+.promotionOverlay{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(8,10,14,.64);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+}
+.promotionOverlay.show{display:flex}
+.promotionCard{
+  width:min(92vw,420px);
+  background:#171a20;
+  border:1px solid #3a404c;
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 20px 55px rgba(0,0,0,.45);
+}
+.promotionTitle{
+  font-size:18px;
+  font-weight:850;
+  margin-bottom:4px;
+}
+.promotionSub{
+  font-size:13px;
+  color:var(--muted);
+  margin-bottom:12px;
+}
+.promotionChoices{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+}
+.promotionBtn{
+  min-width:0;
+  padding:10px 6px;
+  font-size:13px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+}
+.promotionIcon{
+  font-size:38px;
+  line-height:1;
+}
+.promotionCancel{
+  width:100%;
+  margin-top:10px;
+  font-size:13px;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2B.7</h1>
-<div class="sub">Opening recognition + personalized coaching + live material counter + reload latest.</div>
+<h1>Chess Coach v0.9.2B.8</h1>
+<div class="sub">Opening recognition + personalized coaching + live material counter + promotion choice.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -1183,48 +1237,37 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     renderMoves();
   }
 
-  function handleSquare(sq){
-    feedbackEl.textContent='';
+  let pendingPromotion=null;
 
-    if(!selected){
-      const p=game.get(sq);
-      if(p&&p.color===game.turn()){
-        selected=sq;
-        legalTargets=legalMovesFrom(sq).map(m=>m.to);
-        render();
-      }
-      return;
-    }
+  function promotionDisplayGlyph(piece,color){
+    const glyphs={
+      w:{q:'♕',r:'♖',b:'♗',n:'♘'},
+      b:{q:'♛',r:'♜',b:'♝',n:'♞'}
+    };
+    return glyphs[color][piece];
+  }
 
-    if(sq===selected){
-      selected=null;
-      legalTargets=[];
-      render();
-      return;
-    }
+  function showPromotionChooser(from,to,color){
+    pendingPromotion={from,to,color};
+    const overlay=document.getElementById('promotionOverlay');
+    document.getElementById('promotionSub').textContent=
+      (color==='w'?'White':'Black')+' pawn reached '+to+'. Choose promotion piece.';
+    overlay.querySelectorAll('[data-promotion]').forEach(btn=>{
+      const type=btn.dataset.promotion;
+      btn.querySelector('.promotionIcon').textContent=promotionDisplayGlyph(type,color);
+    });
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden','false');
+  }
 
-    const own=game.get(sq);
-    if(own&&own.color===game.turn()){
-      selected=sq;
-      legalTargets=legalMovesFrom(sq).map(m=>m.to);
-      render();
-      return;
-    }
+  function hidePromotionChooser(){
+    const overlay=document.getElementById('promotionOverlay');
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden','true');
+    pendingPromotion=null;
+  }
 
-    let move=null;
-    try{
-      move=game.move({from:selected,to:sq,promotion:'q'});
-    }catch(e){}
-
-    if(!move){
-      feedbackEl.textContent='Illegal move.';
-      feedbackEl.className='small error';
-      selected=null;
-      legalTargets=[];
-      render();
-      return;
-    }
-
+  function processPlayedMove(move){
     lastMove={from:move.from,to:move.to};
     selected=null;
     legalTargets=[];
@@ -1261,7 +1304,6 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         document.getElementById('puzzleStatus').textContent='Not Stockfish’s top choice. You played '+move.san+'. Reset the puzzle and run Checks → Captures → Threats again, or reveal the answer.';
       }
 
-      // Restore the original game line rather than replacing the imported PGN.
       const wasCorrect=playedUci===puzzleExpectedUci;
       jumpToMove(puzzleMoveIndex);
       orientation=savedOrientation;
@@ -1285,6 +1327,92 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     render();
     scheduleAutoAnalysis();
   }
+
+  function attemptManualMove(from,to,promotion){
+    let move=null;
+    try{
+      const spec={from,to};
+      if(promotion)spec.promotion=promotion;
+      move=game.move(spec);
+    }catch(e){}
+
+    if(!move){
+      feedbackEl.textContent='Illegal move.';
+      feedbackEl.className='small error';
+      selected=null;
+      legalTargets=[];
+      render();
+      return false;
+    }
+
+    processPlayedMove(move);
+    return true;
+  }
+
+  function handleSquare(sq){
+    feedbackEl.textContent='';
+
+    if(pendingPromotion)return;
+
+    if(!selected){
+      const p=game.get(sq);
+      if(p&&p.color===game.turn()){
+        selected=sq;
+        legalTargets=legalMovesFrom(sq).map(m=>m.to);
+        render();
+      }
+      return;
+    }
+
+    if(sq===selected){
+      selected=null;
+      legalTargets=[];
+      render();
+      return;
+    }
+
+    const own=game.get(sq);
+    if(own&&own.color===game.turn()){
+      selected=sq;
+      legalTargets=legalMovesFrom(sq).map(m=>m.to);
+      render();
+      return;
+    }
+
+    const movingPiece=game.get(selected);
+    const isPromotion=
+      movingPiece &&
+      movingPiece.type==='p' &&
+      ((movingPiece.color==='w'&&sq[1]==='8')||(movingPiece.color==='b'&&sq[1]==='1'));
+
+    if(isPromotion){
+      const legal=legalMovesFrom(selected).some(m=>m.to===sq);
+      if(legal){
+        showPromotionChooser(selected,sq,movingPiece.color);
+        return;
+      }
+    }
+
+    attemptManualMove(selected,sq,null);
+  }
+
+  document.querySelectorAll('[data-promotion]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(!pendingPromotion)return;
+      const {from,to}=pendingPromotion;
+      const choice=btn.dataset.promotion;
+      hidePromotionChooser();
+      attemptManualMove(from,to,choice);
+    });
+  });
+
+  document.getElementById('promotionCancel').addEventListener('click',()=>{
+    hidePromotionChooser();
+    feedbackEl.textContent='Promotion cancelled.';
+    feedbackEl.className='small';
+    render();
+  });
+
 
   function rebuildTo(n){
     const rebuilt=new Chess();
@@ -2420,5 +2548,20 @@ document.getElementById('flipBtn').addEventListener('click',()=>{
   }
 })();
 </script>
+
+<div id="promotionOverlay" class="promotionOverlay" aria-hidden="true">
+  <div class="promotionCard" role="dialog" aria-modal="true" aria-labelledby="promotionTitle">
+    <div id="promotionTitle" class="promotionTitle">Promote pawn</div>
+    <div id="promotionSub" class="promotionSub">Choose the piece for promotion.</div>
+    <div class="promotionChoices">
+      <button class="promotionBtn" data-promotion="q"><span class="promotionIcon">♛</span><span>Queen</span></button>
+      <button class="promotionBtn" data-promotion="r"><span class="promotionIcon">♜</span><span>Rook</span></button>
+      <button class="promotionBtn" data-promotion="b"><span class="promotionIcon">♝</span><span>Bishop</span></button>
+      <button class="promotionBtn" data-promotion="n"><span class="promotionIcon">♞</span><span>Knight</span></button>
+    </div>
+    <button id="promotionCancel" class="promotionCancel">Cancel</button>
+  </div>
+</div>
+
 </body>
 </html>
