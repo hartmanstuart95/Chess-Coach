@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2B.3</title>
+<title>Chess Coach v0.9.2B.4</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2B.3 board visual system === */
+/* === Chess Coach v0.9.2B.4 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -282,12 +282,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .openingValue{font-weight:800;line-height:1.35}
 .openingNote{margin-top:10px;padding:11px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.45}
 .openingGood{color:#86efac}.openingWarn{color:#fde68a}.openingBad{color:#fca5a5}
+
+.piece img.knightImg{
+  width:78%;
+  height:96%;
+  object-fit:fill;
+  transform:translateY(-4%);
+  transform-origin:center center;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2B.3</h1>
-<div class="sub">Opening recognition + personalized theory deviation coaching + Safari-safe traditional knights.</div>
+<h1>Chess Coach v0.9.2B.4</h1>
+<div class="sub">Opening recognition + personalized theory deviation coaching + refined knight proportions.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -1001,6 +1009,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
         img.alt='';
         img.draggable=false;
         img.src=pieceSVGData(p.type,p.color);
+        if(p.type==='n') img.classList.add('knightImg');
         span.appendChild(img);
         div.appendChild(span);
       }else if(legalTargets.includes(sq)){
