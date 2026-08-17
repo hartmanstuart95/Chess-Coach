@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2B.6</title>
+<title>Chess Coach v0.9.2B.7</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2B.6 board visual system === */
+/* === Chess Coach v0.9.2B.7 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -353,12 +353,21 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   .materialPanel{grid-template-columns:1fr 1fr}
   .materialBalance{grid-column:1 / -1}
 }
+
+#reloadLatestBtn{
+  border-style:dashed;
+  color:#b9e8ff;
+  background:#18232b;
+}
+#reloadLatestBtn:active{
+  transform:translateY(1px);
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2B.6</h1>
-<div class="sub">Opening recognition + personalized coaching + live material counter.</div>
+<h1>Chess Coach v0.9.2B.7</h1>
+<div class="sub">Opening recognition + personalized coaching + live material counter + reload latest.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -391,6 +400,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <button id="resetBtn">Reset</button>
       <button id="backBtn">◀ Back</button>
       <button id="forwardBtn">Forward ▶</button>
+      <button id="reloadLatestBtn" title="Force Safari to request the newest GitHub Pages build">↻ Reload Latest</button>
     </div>
     <div id="status" class="status"></div>
     <div id="feedback" class="small" aria-live="polite">Tap a piece to see legal moves.</div>
@@ -1470,7 +1480,16 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     renderOpeningCoach();
   }
 
-  document.getElementById('flipBtn').addEventListener('click',()=>{
+  
+  function reloadLatestBuild(){
+    const url=new URL(window.location.href);
+    url.searchParams.set('v',Date.now().toString());
+    window.location.replace(url.toString());
+  }
+
+  document.getElementById('reloadLatestBtn').addEventListener('click',reloadLatestBuild);
+
+document.getElementById('flipBtn').addEventListener('click',()=>{
     orientation=orientation==='white'?'black':'white';
     savedOrientation=orientation;
     render();
