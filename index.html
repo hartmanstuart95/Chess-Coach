@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2B.8</title>
+<title>Chess Coach v0.9.2B.8.1</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2B.8 board visual system === */
+/* === Chess Coach v0.9.2B.8.1 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -420,7 +420,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2B.8</h1>
+<h1>Chess Coach v0.9.2B.8.1</h1>
 <div class="sub">Opening recognition + personalized coaching + live material counter + promotion choice.</div>
 
 <div class="layout">
@@ -694,6 +694,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     </div>
   </div>
 </div>
+</div>
+
+<div id="promotionOverlay" class="promotionOverlay" aria-hidden="true">
+  <div class="promotionCard" role="dialog" aria-modal="true" aria-labelledby="promotionTitle">
+    <div id="promotionTitle" class="promotionTitle">Promote pawn</div>
+    <div id="promotionSub" class="promotionSub">Choose the piece for promotion.</div>
+    <div class="promotionChoices">
+      <button class="promotionBtn" data-promotion="q"><span class="promotionIcon">♛</span><span>Queen</span></button>
+      <button class="promotionBtn" data-promotion="r"><span class="promotionIcon">♜</span><span>Rook</span></button>
+      <button class="promotionBtn" data-promotion="b"><span class="promotionIcon">♝</span><span>Bishop</span></button>
+      <button class="promotionBtn" data-promotion="n"><span class="promotionIcon">♞</span><span>Knight</span></button>
+    </div>
+    <button id="promotionCancel" class="promotionCancel">Cancel</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
@@ -2548,20 +2562,6 @@ document.getElementById('flipBtn').addEventListener('click',()=>{
   }
 })();
 </script>
-
-<div id="promotionOverlay" class="promotionOverlay" aria-hidden="true">
-  <div class="promotionCard" role="dialog" aria-modal="true" aria-labelledby="promotionTitle">
-    <div id="promotionTitle" class="promotionTitle">Promote pawn</div>
-    <div id="promotionSub" class="promotionSub">Choose the piece for promotion.</div>
-    <div class="promotionChoices">
-      <button class="promotionBtn" data-promotion="q"><span class="promotionIcon">♛</span><span>Queen</span></button>
-      <button class="promotionBtn" data-promotion="r"><span class="promotionIcon">♜</span><span>Rook</span></button>
-      <button class="promotionBtn" data-promotion="b"><span class="promotionIcon">♝</span><span>Bishop</span></button>
-      <button class="promotionBtn" data-promotion="n"><span class="promotionIcon">♞</span><span>Knight</span></button>
-    </div>
-    <button id="promotionCancel" class="promotionCancel">Cancel</button>
-  </div>
-</div>
 
 </body>
 </html>
