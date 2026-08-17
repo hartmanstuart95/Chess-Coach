@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2A</title>
+<title>Chess Coach v0.9.2B</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2A board visual system === */
+/* === Chess Coach v0.9.2B board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -275,12 +275,19 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
 
 
+
+.openingGrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.openingStat{background:#101218;border:1px solid #343a46;border-radius:10px;padding:10px}
+.openingLabel{font-size:11px;color:var(--muted);margin-bottom:4px}
+.openingValue{font-weight:800;line-height:1.35}
+.openingNote{margin-top:10px;padding:11px;border-radius:10px;background:#101218;border:1px solid #343a46;line-height:1.45}
+.openingGood{color:#86efac}.openingWarn{color:#fde68a}.openingBad{color:#fca5a5}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2A</h1>
-<div class="sub">Pattern recognition + classic Staunton set with refined knights.</div>
+<h1>Chess Coach v0.9.2B</h1>
+<div class="sub">Opening recognition + personalized theory deviation coaching.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -325,6 +332,25 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       <div class="row" style="margin-top:8px">
         <button id="loadBtn" class="primary">Load PGN</button>
         <button id="sampleBtn">Load sample</button>
+      </div>
+    </div>
+
+    <div class="card" id="openingCoachCard">
+      <div class="badge">OPENING COACH</div>
+      <strong id="openingName">Load a PGN to identify the opening.</strong>
+      <div id="openingEco" class="small" style="margin-top:4px"></div>
+      <div class="openingGrid">
+        <div class="openingStat">
+          <div class="openingLabel">Recognized through</div>
+          <div id="openingThrough" class="openingValue">—</div>
+        </div>
+        <div class="openingStat">
+          <div class="openingLabel">First departure</div>
+          <div id="openingDeviation" class="openingValue">—</div>
+        </div>
+      </div>
+      <div id="openingCoachNote" class="openingNote small">
+        Chess Coach distinguishes leaving stored theory from making a bad move.
       </div>
     </div>
 
@@ -1138,6 +1164,147 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     scheduleAutoAnalysis();
   }
 
+
+  const OPENING_BOOK=[
+    {name:'London System',eco:'D02',moves:['d4','d5','Nf3','Nf6','Bf4','e6','e3','Bd6','Bg3','O-O','Bd3','c5']},
+    {name:'London System',eco:'D02',moves:['d4','Nf6','Nf3','g6','Bf4','Bg7','e3','O-O','Be2','d6','O-O']},
+    {name:'Jobava London',eco:'D00',moves:['d4','d5','Nc3','Nf6','Bf4']},
+    {name:"Queen's Gambit",eco:'D06',moves:['d4','d5','c4']},
+    {name:"Queen's Gambit Declined",eco:'D30',moves:['d4','d5','c4','e6','Nc3','Nf6']},
+    {name:'Slav Defense',eco:'D10',moves:['d4','d5','c4','c6']},
+    {name:"King's Indian Defense",eco:'E60',moves:['d4','Nf6','c4','g6','Nc3','Bg7','e4','d6']},
+    {name:'Nimzo-Indian Defense',eco:'E20',moves:['d4','Nf6','c4','e6','Nc3','Bb4']},
+    {name:'Italian Game',eco:'C50',moves:['e4','e5','Nf3','Nc6','Bc4']},
+    {name:'Giuoco Piano',eco:'C50',moves:['e4','e5','Nf3','Nc6','Bc4','Bc5']},
+    {name:'Ruy Lopez',eco:'C60',moves:['e4','e5','Nf3','Nc6','Bb5']},
+    {name:'Scotch Game',eco:'C44',moves:['e4','e5','Nf3','Nc6','d4']},
+    {name:'Four Knights Game',eco:'C47',moves:['e4','e5','Nf3','Nc6','Nc3','Nf6']},
+    {name:'Sicilian Defense',eco:'B20',moves:['e4','c5']},
+    {name:'Sicilian Defense — Open',eco:'B20',moves:['e4','c5','Nf3','d6','d4','cxd4','Nxd4']},
+    {name:'Caro-Kann Defense',eco:'B10',moves:['e4','c6','d4','d5']},
+    {name:'French Defense',eco:'C00',moves:['e4','e6','d4','d5']},
+    {name:'Scandinavian Defense',eco:'B01',moves:['e4','d5']},
+    {name:"Alekhine's Defense",eco:'B02',moves:['e4','Nf6']},
+    {name:'Pirc Defense',eco:'B07',moves:['e4','d6','d4','Nf6','Nc3','g6']},
+    {name:'English Opening',eco:'A10',moves:['c4']},
+    {name:'Réti Opening',eco:'A04',moves:['Nf3','d5','g3']},
+    {name:"King's Gambit",eco:'C30',moves:['e4','e5','f4']},
+    {name:'Danish Gambit',eco:'C21',moves:['e4','e5','d4','exd4','c3']},
+    {name:'Vienna Game',eco:'C25',moves:['e4','e5','Nc3']}
+  ];
+
+  function cleanOpeningSan(s){
+    return (s||'').replace(/[+#?!]+$/g,'');
+  }
+
+  function findOpeningMatch(){
+    if(!loadedMoves.length)return null;
+    const gm=loadedMoves.map(cleanOpeningSan);
+    let best=null;
+    OPENING_BOOK.forEach(line=>{
+      let matched=0;
+      for(let i=0;i<Math.min(gm.length,line.moves.length);i++){
+        if(gm[i]!==cleanOpeningSan(line.moves[i]))break;
+        matched++;
+      }
+      const min=line.moves.length<=2?2:Math.min(3,line.moves.length);
+      if(matched>=min){
+        if(!best||matched>best.matched||(matched===best.matched&&line.moves.length>best.moves.length)){
+          best={...line,matched};
+        }
+      }
+    });
+    return best;
+  }
+
+  function openingMoveLabel(i,san){
+    return (Math.floor(i/2)+1)+(i%2===0?'.':'...')+san;
+  }
+
+  function openingReviewRow(i){
+    return batchRows?.find(r=>r.i===i)||null;
+  }
+
+  function renderOpeningCoach(){
+    const nameEl=document.getElementById('openingName');
+    const ecoEl=document.getElementById('openingEco');
+    const throughEl=document.getElementById('openingThrough');
+    const devEl=document.getElementById('openingDeviation');
+    const noteEl=document.getElementById('openingCoachNote');
+    if(!nameEl)return;
+
+    if(!loadedMoves.length){
+      nameEl.textContent='Load a PGN to identify the opening.';
+      ecoEl.textContent='';
+      throughEl.textContent='—';
+      devEl.textContent='—';
+      noteEl.className='openingNote small';
+      noteEl.textContent='Chess Coach distinguishes leaving stored theory from making a bad move.';
+      return;
+    }
+
+    const match=findOpeningMatch();
+    if(!match){
+      nameEl.textContent='Opening not yet recognized';
+      ecoEl.textContent='No strong match in the current curated opening reference.';
+      throughEl.textContent='—';
+      devEl.textContent='—';
+      noteEl.className='openingNote small';
+      noteEl.textContent='That does not mean the moves are bad—only that this line is not yet stored in Chess Coach.';
+      return;
+    }
+
+    nameEl.textContent=match.name;
+    ecoEl.textContent='ECO '+match.eco+' • '+match.matched+' half-moves matched';
+    const last=Math.max(0,match.matched-1);
+    throughEl.textContent=openingMoveLabel(last,loadedMoves[last]);
+
+    const devIdx=match.matched;
+    if(devIdx>=loadedMoves.length){
+      devEl.textContent='Still in stored line';
+      noteEl.className='openingNote small openingGood';
+      noteEl.textContent='The loaded moves remain inside this Chess Coach reference line.';
+      return;
+    }
+
+    const san=loadedMoves[devIdx];
+    const side=devIdx%2===0?'White':'Black';
+    const player=side==='White'?(pgnHeaders.White||'White'):(pgnHeaders.Black||'Black');
+    const isMe=(mySide==='w'&&side==='White')||(mySide==='b'&&side==='Black');
+    const who=isMe?'You':player;
+    devEl.textContent=openingMoveLabel(devIdx,san)+' • '+who;
+
+    const row=openingReviewRow(devIdx);
+    if(!row){
+      noteEl.className='openingNote small';
+      noteEl.textContent=who+' was first to leave our stored '+match.name+' line with '+san+
+        '. Run Full Game Review to learn whether that departure was actually strong or weak.';
+      return;
+    }
+
+    const label=row.rating?.label||'';
+    const best=row.bestSan||'';
+    if(['Best','Excellent','Good','Checkmate','Mate found'].includes(label)){
+      noteEl.className='openingNote small openingGood';
+      noteEl.textContent=who+' left our stored '+match.name+' reference with '+san+
+        ', but Stockfish rated it '+label+'. Leaving theory is not the same as making a mistake.'+
+        (best?' Engine preference: '+best+'.':'');
+    }else if(label==='Inaccuracy'){
+      noteEl.className='openingNote small openingWarn';
+      noteEl.textContent=who+' left our stored '+match.name+' reference with '+san+
+        '. Stockfish called it an Inaccuracy, so the move is worth reviewing—the problem is move quality, not simply leaving theory.'+
+        (best?' Engine preference: '+best+'.':'');
+    }else if(['Mistake','Blunder','Mate missed','Mate allowed'].includes(label)){
+      noteEl.className='openingNote small openingBad';
+      noteEl.textContent=who+' left our stored '+match.name+' reference with '+san+
+        ', and Stockfish classified it as '+label+'. This is a useful opening-to-middlegame transition position to study.'+
+        (best?' Engine preference: '+best+'.':'');
+    }else{
+      noteEl.className='openingNote small';
+      noteEl.textContent=who+' was first to leave our stored '+match.name+' line with '+san+'.';
+    }
+  }
+
   function renderMoves(){
     if(!loadedMoves.length){
       movesEl.textContent='No moves yet.';
@@ -1162,6 +1329,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
       if(i%2===1)movesEl.appendChild(document.createElement('br'));
     }
+    renderOpeningCoach();
   }
 
   document.getElementById('flipBtn').addEventListener('click',()=>{
@@ -1615,6 +1783,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     updateProfileFromRows();
     renderPatternInsights();
 
+    renderOpeningCoach();
     document.getElementById('gameReviewStatus').textContent='Full game review complete • '+rows.length+' moves classified.';
     document.getElementById('analyzeGameBtn').disabled=false;
     document.getElementById('analyzeGameBtn').textContent='Analyze full game again';
