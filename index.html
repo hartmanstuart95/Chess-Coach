@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chess Coach v0.9.2B.5</title>
+<title>Chess Coach v0.9.2B.6</title>
 <style>
 :root{
   --bg:#111318;--panel:#1a1d24;--text:#f4f4f5;--muted:#a1a1aa;
@@ -162,7 +162,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 .patternFill{height:100%;background:#0ea5e9;border-radius:999px}
 .badge{display:inline-block;background:#173341;color:#9ee6ff;padding:4px 8px;border-radius:999px;font-size:12px;margin-bottom:8px}
 
-/* === Chess Coach v0.9.2B.5 board visual system === */
+/* === Chess Coach v0.9.2B.6 board visual system === */
 .board{
   background:#111318;
   border:2px solid #353a45;
@@ -308,12 +308,57 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
   -webkit-text-stroke:0.35px #050607;
   text-shadow:0 1px 0 rgba(255,255,255,.08),0 2px 1px rgba(0,0,0,.30);
 }
+
+.materialPanel{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:1fr 1fr auto;
+  gap:8px;
+  align-items:stretch;
+}
+.materialSide,.materialBalance{
+  background:#151820;
+  border:1px solid #303641;
+  border-radius:10px;
+  padding:9px 11px;
+}
+.materialLabel{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:var(--muted);
+  margin-bottom:3px;
+  font-weight:800;
+}
+.materialPieces{
+  font-size:14px;
+  font-weight:750;
+  white-space:nowrap;
+}
+.materialBalance{
+  min-width:116px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  text-align:center;
+}
+.materialScore{
+  font-size:16px;
+  font-weight:850;
+}
+.materialEqual{color:#d4d4d8}
+.materialWhite{color:#f5f1e8}
+.materialBlack{color:#aeb4bd}
+@media(max-width:560px){
+  .materialPanel{grid-template-columns:1fr 1fr}
+  .materialBalance{grid-column:1 / -1}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>Chess Coach v0.9.2B.5</h1>
-<div class="sub">Opening recognition + personalized theory deviation coaching + hybrid glyph knights.</div>
+<h1>Chess Coach v0.9.2B.6</h1>
+<div class="sub">Opening recognition + personalized coaching + live material counter.</div>
 
 <div class="layout">
   <div class="leftPane">
@@ -325,6 +370,20 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
       </div>
       <div id="board" class="board" aria-label="Interactive chess board"></div>
     </div>
+    </div>
+    <div class="materialPanel" id="materialPanel" aria-label="Material and piece count">
+      <div class="materialSide">
+        <div class="materialLabel">White pieces</div>
+        <div id="whiteMaterialPieces" class="materialPieces">Q1 · R2 · B2 · N2 · P8</div>
+      </div>
+      <div class="materialSide">
+        <div class="materialLabel">Black pieces</div>
+        <div id="blackMaterialPieces" class="materialPieces">Q1 · R2 · B2 · N2 · P8</div>
+      </div>
+      <div class="materialBalance">
+        <div class="materialLabel">Material</div>
+        <div id="materialScore" class="materialScore materialEqual">Equal</div>
+      </div>
     </div>
     <div class="toolbar">
       <button id="flipBtn">Flip board</button>
@@ -999,6 +1058,47 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
     return game.moves({square:square,verbose:true});
   }
 
+
+  function updateMaterialCounter(){
+    const counts={
+      w:{q:0,r:0,b:0,n:0,p:0},
+      b:{q:0,r:0,b:0,n:0,p:0}
+    };
+
+    for(const sq of squareNames()){
+      const p=game.get(sq);
+      if(p && counts[p.color] && Object.prototype.hasOwnProperty.call(counts[p.color],p.type)){
+        counts[p.color][p.type]++;
+      }
+    }
+
+    const format=c=>'Q'+c.q+' · R'+c.r+' · B'+c.b+' · N'+c.n+' · P'+c.p;
+    const whiteEl=document.getElementById('whiteMaterialPieces');
+    const blackEl=document.getElementById('blackMaterialPieces');
+    const scoreEl=document.getElementById('materialScore');
+
+    if(whiteEl)whiteEl.textContent=format(counts.w);
+    if(blackEl)blackEl.textContent=format(counts.b);
+
+    const value={q:9,r:5,b:3,n:3,p:1};
+    const total=c=>Object.keys(value).reduce((sum,k)=>sum+(c[k]*value[k]),0);
+    const diff=total(counts.w)-total(counts.b);
+
+    if(scoreEl){
+      scoreEl.className='materialScore';
+      if(diff===0){
+        scoreEl.textContent='Equal';
+        scoreEl.classList.add('materialEqual');
+      }else if(diff>0){
+        scoreEl.textContent='White +'+diff;
+        scoreEl.classList.add('materialWhite');
+      }else{
+        scoreEl.textContent='Black +'+Math.abs(diff);
+        scoreEl.classList.add('materialBlack');
+      }
+    }
+  }
+
   function render(){
     boardEl.innerHTML='';
 
@@ -1069,6 +1169,7 @@ textarea{width:100%;min-height:160px;border-radius:10px;border:1px solid #3b4250
 
     statusEl.textContent=txt;
     fenEl.textContent=game.fen();
+    updateMaterialCounter();
     renderMoves();
   }
 
